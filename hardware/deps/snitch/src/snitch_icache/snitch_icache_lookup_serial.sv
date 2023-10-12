@@ -8,7 +8,8 @@
 
 /// An actual cache lookup.
 module snitch_icache_lookup_serial #(
-    parameter snitch_icache_pkg::config_t CFG = '0
+    parameter snitch_icache_pkg::config_t CFG = '0,
+    parameter logic RELIABILITY_MODE = '1 // Fault tolerance enabled setting it to 1
 )(
     input  logic                        clk_i,
     input  logic                        rst_ni,
@@ -40,6 +41,7 @@ module snitch_icache_lookup_serial #(
 );
 
     localparam int unsigned DATA_ADDR_WIDTH = $clog2(CFG.SET_COUNT) + CFG.COUNT_ALIGN;
+    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? CFG.SET_COUNT : '0; 
 
     `ifndef SYNTHESIS
     initial assert(CFG != '0);
@@ -80,7 +82,7 @@ module snitch_icache_lookup_serial #(
 
     logic [CFG.COUNT_ALIGN-1:0] tag_addr;
     logic [CFG.SET_COUNT-1:0]   tag_enable;
-    logic [CFG.TAG_WIDTH+1:0]   tag_wdata, tag_rdata [CFG.SET_COUNT];
+    logic [CFG.TAG_WIDTH+1+RELIABILITY_MODE:0]   tag_wdata, tag_rdata [CFG.SET_COUNT];
     logic                       tag_write;
 
     tag_req_t                   tag_req_d, tag_req_q;
@@ -90,6 +92,7 @@ module snitch_icache_lookup_serial #(
 
     logic [CFG.TAG_WIDTH-1:0]   required_tag;
     logic [CFG.SET_COUNT-1:0]   line_hit;
+    logic [CFG.SET_COUNT-1:0]   tag_parity_error;
 
     logic [DATA_ADDR_WIDTH-1:0] lookup_addr;
     logic [DATA_ADDR_WIDTH-1:0] write_addr;
@@ -100,9 +103,13 @@ module snitch_icache_lookup_serial #(
 
     // Multiplex read and write access to the tag banks onto one port, prioritizing write accesses
     always_comb begin
-        tag_addr   = in_addr_i >> CFG.LINE_ALIGN;
+        tag_addr   = in_addr_i >> CFG.LINE_ALIGN; //if 128 line count, shift right 8 bits to get the tag (first 8 bits determine the line of the )
         tag_enable = '0;
-        tag_wdata  = {1'b1, write_error_i, write_tag_i};
+        if(RELIABILITY_MODE) begin
+            tag_wdata  = {^write_tag_i, 1'b1, write_error_i, write_tag_i};
+        end else begin
+            tag_wdata  = {1'b1, write_error_i, write_tag_i};
+        end
         tag_write  = 1'b0;
 
         write_ready_o = 1'b0;
@@ -146,13 +153,13 @@ module snitch_icache_lookup_serial #(
             );
         end
     end else begin : gen_sram
-        logic [CFG.SET_COUNT*(CFG.TAG_WIDTH+2)-1:0] tag_rdata_flat;
+        logic [CFG.SET_COUNT*(CFG.TAG_WIDTH+2+RELIABILITY_MODE)-1:0] tag_rdata_flat;
         for (genvar i = 0; i < CFG.SET_COUNT; i++) begin : g_sets_rdata
-            assign tag_rdata[i] = tag_rdata_flat[i*(CFG.TAG_WIDTH+2)+:CFG.TAG_WIDTH+2];
+            assign tag_rdata[i] = tag_rdata_flat[i*(CFG.TAG_WIDTH+2+RELIABILITY_MODE)+:CFG.TAG_WIDTH+2+RELIABILITY_MODE];
         end
         tc_sram #(
-            .DataWidth ( (CFG.TAG_WIDTH+2) * CFG.SET_COUNT ),
-            .ByteWidth ( CFG.TAG_WIDTH+2                   ),
+            .DataWidth ( (CFG.TAG_WIDTH+2+RELIABILITY_MODE) * CFG.SET_COUNT ), //we store set_count number of tags (and valid/error bits) in every line
+            .ByteWidth ( CFG.TAG_WIDTH+2+RELIABILITY_MODE                   ),
             .NumWords  ( CFG.LINE_COUNT                    ),
             .NumPorts  ( 1                                 )
         ) i_tag (
@@ -167,15 +174,29 @@ module snitch_icache_lookup_serial #(
         );
     end
 
+    // compute tag parity bit the cycle before reading it
+    logic exp_tag_parity_bit;
+    if (RELIABILITY_MODE) begin
+        assign exp_tag_parity_bit = ^required_tag;
+    end
+
     // Determine which set hit
     always_comb begin
         automatic logic [CFG.SET_COUNT-1:0] errors;
         required_tag = tag_req_q.addr >> (CFG.LINE_ALIGN + CFG.COUNT_ALIGN);
+        tag_parity_error = '0;
         for (int i = 0; i < CFG.SET_COUNT; i++) begin
-            line_hit[i] = tag_rdata[i][CFG.TAG_WIDTH+1] && tag_rdata[i][CFG.TAG_WIDTH-1:0] == required_tag;
-            errors[i] = tag_rdata[i][CFG.TAG_WIDTH] && line_hit[i];
+            line_hit[i] = tag_rdata[i][CFG.TAG_WIDTH+1] && tag_rdata[i][CFG.TAG_WIDTH-1:0] == required_tag; //check valid bit and tag
+            errors[i] = tag_rdata[i][CFG.TAG_WIDTH] && line_hit[i]; //check error bit
+            if (RELIABILITY_MODE) begin
+                tag_parity_error[i] = (tag_rdata[i][CFG.TAG_WIDTH+2] == exp_tag_parity_bit) ? '0:'1; //check tag parity ^tag_rdata[i][CFG.TAG_WIDTH-1:0])
+            end;
         end
-        tag_rsp_s.hit = |line_hit;
+        if (RELIABILITY_MODE) begin
+            tag_rsp_s.hit = |(line_hit & ~tag_parity_error);
+        end else begin
+            tag_rsp_s.hit = |line_hit;
+        end
         tag_rsp_s.error = |errors;
     end
 
@@ -222,7 +243,13 @@ module snitch_icache_lookup_serial #(
         logic                        error;
     } data_req_t;
 
-    typedef logic [CFG.LINE_WIDTH-1:0] data_rsp_t;
+    /*typedef struct packed{
+        logic [CFG.LINE_WIDTH-1:0] data_line;
+        logic [DATA_PARITY_WIDTH-1:0] parity_bit;
+    }data_rsp_t;*/
+
+    typedef logic [CFG.LINE_WIDTH + DATA_PARITY_WIDTH - 1:0] data_rsp_t;
+
 
     logic [DATA_ADDR_WIDTH-1:0] data_addr;
     logic                       data_enable;
@@ -240,15 +267,24 @@ module snitch_icache_lookup_serial #(
     assign data_req_d.hit   = tag_rsp.hit;
     assign data_req_d.error = tag_rsp.error;
 
-    assign lookup_addr = {tag_rsp.cset, tag_req_q.addr[CFG.LINE_ALIGN +: CFG.COUNT_ALIGN]};
+    assign lookup_addr = {tag_rsp.cset, tag_req_q.addr[CFG.LINE_ALIGN +: CFG.COUNT_ALIGN]}; //eg if 256 line width Line_align is log2(nr of bytes), 2 set counts, i.e. 3 bits for line, 1 for set, take bits from 1 to 5
     assign write_addr  = {write_set_i, write_addr_i};
 
+    localparam WORD_WIDTH = CFG.LINE_WIDTH/CFG.SET_COUNT;
     // Data bank port mux
     always_comb begin
+
+        // Compute parity bit
+        if (RELIABILITY_MODE) begin 
+            for (int i = 0; i < CFG.SET_COUNT; i++) begin
+                data_wdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] = ^write_data_i[CFG.LINE_WIDTH - WORD_WIDTH*i -1 -: WORD_WIDTH]; 
+            end 
+        end
+
         // Default read request
         data_addr   = lookup_addr;
         data_enable = tag_valid && tag_rsp.hit; // Only read data on hit
-        data_wdata  = write_data_i;
+        data_wdata[CFG.LINE_WIDTH -1:0]  = write_data_i; 
         data_write  = 1'b0;
         // Write takes priority
         if (!init_phase && write_valid_i) begin
@@ -259,9 +295,9 @@ module snitch_icache_lookup_serial #(
     end
 
     tc_sram #(
-        .DataWidth ( CFG.LINE_WIDTH                 ),
-        .NumWords  ( CFG.LINE_COUNT * CFG.SET_COUNT ),
-        .NumPorts  ( 1                              )
+        .DataWidth ( CFG.LINE_WIDTH + DATA_PARITY_WIDTH ),
+        .NumWords  ( CFG.LINE_COUNT * CFG.SET_COUNT     ),
+        .NumPorts  ( 1                                  )
     ) i_data (
         .clk_i   ( clk_i       ),
         .rst_ni  ( rst_ni      ),
@@ -272,6 +308,18 @@ module snitch_icache_lookup_serial #(
         .be_i    ( '1          ),
         .rdata_o ( data_rdata  )
     );
+
+    logic [CFG.SET_COUNT-1:0]   parity_error;
+    always_comb begin : p_parity_check
+        parity_error = '0;
+        if (RELIABILITY_MODE) begin 
+            for (int i = 0; i < CFG.SET_COUNT; i++) begin
+                parity_error[CFG.SET_COUNT-1-i] = (data_rdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] == ^data_rdata[CFG.LINE_WIDTH - WORD_WIDTH*i -1 -: WORD_WIDTH])? '0 : '1; 
+            end 
+        end
+
+
+    end
 
     // Buffer the metadata on a valid handshake. Stall on write (implicit in tag_ready)
     `FFL(data_req_q, data_req_d, tag_valid && tag_ready, '0, clk_i, rst_ni)

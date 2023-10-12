@@ -38,3 +38,9 @@ sources:
     - src/snitch_icache/snitch_icache_refill.sv
     - src/snitch_read_only_cache/snitch_axi_to_cache.sv
     - src/snitch_read_only_cache/snitch_read_only_cache.sv
+
+  - target: rocache_test
+    files:
+      #- ../../tb/RO_cache_tb/sourcecode/tb/snitch_read_only_cache_tb.sv
+      - tb/src/snitch_read_only_cache_tb.sv
+
