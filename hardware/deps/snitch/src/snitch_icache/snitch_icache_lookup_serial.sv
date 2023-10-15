@@ -31,7 +31,7 @@ module snitch_icache_lookup_serial #(
     output logic                        out_valid_o,
     input  logic                        out_ready_i,
 
-    input  logic [CFG.COUNT_ALIGN-1:0]  write_addr_i,
+    input  logic [CFG.COUNT_ALIGN-1:0]  write_addr_i, //when write valid, it goes contemporaritly to both stages, otherwise data stage uses lookup addr from tag stage
     input  logic [CFG.SET_ALIGN-1:0]    write_set_i,
     input  logic [CFG.LINE_WIDTH-1:0]   write_data_i,
     input  logic [CFG.TAG_WIDTH-1:0]    write_tag_i,
@@ -92,7 +92,8 @@ module snitch_icache_lookup_serial #(
 
     logic [CFG.TAG_WIDTH-1:0]   required_tag;
     logic [CFG.SET_COUNT-1:0]   line_hit;
-    logic [CFG.SET_COUNT-1:0]   tag_parity_error;
+    logic [CFG.SET_COUNT-1:0]   tag_parity_error_d, tag_parity_error_q;
+    logic                       faulty_hit;
 
     logic [DATA_ADDR_WIDTH-1:0] lookup_addr;
     logic [DATA_ADDR_WIDTH-1:0] write_addr;
@@ -127,6 +128,16 @@ module snitch_icache_lookup_serial #(
             tag_enable    = $unsigned(1 << write_set_i);
             tag_write     = 1'b1;
             write_ready_o = 1'b1;
+        end else if (faulty_hit) begin //we need to set second bit (valid) of write data of the previous adress to 0
+            //in_ready_o = '0; //we do not accept new read request
+            // Request to store data in pipeline, zero as no new data
+            //req_valid  = 1'b0; 
+
+            tag_addr    = tag_req_q.addr; //buffered version of in_addr_i
+            tag_enable = tag_parity_error_q; // which set must be written to (the faulty one(s))
+            tag_wdata = '0;
+            tag_write   = '1;
+
         end else if (in_valid_i) begin
             // Check cache
             tag_enable = '1;
@@ -174,26 +185,32 @@ module snitch_icache_lookup_serial #(
         );
     end
 
-    // compute tag parity bit the cycle before reading it
-    logic exp_tag_parity_bit;
+    // compute tag parity bit the cycle before reading it and buffer it
+    logic exp_tag_parity_bit_d, exp_tag_parity_bit_q;
+
     if (RELIABILITY_MODE) begin
-        assign exp_tag_parity_bit = ^required_tag;
+        assign exp_tag_parity_bit_d = ^(tag_req_d.addr >> (CFG.LINE_ALIGN + CFG.COUNT_ALIGN));
+    end
+    if (RELIABILITY_MODE) begin
+        `FFL(exp_tag_parity_bit_q, exp_tag_parity_bit_d, req_valid && req_ready, '0, clk_i, rst_ni);
     end
 
     // Determine which set hit
     always_comb begin
         automatic logic [CFG.SET_COUNT-1:0] errors;
         required_tag = tag_req_q.addr >> (CFG.LINE_ALIGN + CFG.COUNT_ALIGN);
-        tag_parity_error = '0;
+        tag_parity_error_d = '0;
+        faulty_hit = '0;
         for (int i = 0; i < CFG.SET_COUNT; i++) begin
             line_hit[i] = tag_rdata[i][CFG.TAG_WIDTH+1] && tag_rdata[i][CFG.TAG_WIDTH-1:0] == required_tag; //check valid bit and tag
             errors[i] = tag_rdata[i][CFG.TAG_WIDTH] && line_hit[i]; //check error bit
-            if (RELIABILITY_MODE) begin
-                tag_parity_error[i] = (tag_rdata[i][CFG.TAG_WIDTH+2] == exp_tag_parity_bit) ? '0:'1; //check tag parity ^tag_rdata[i][CFG.TAG_WIDTH-1:0])
+            if (RELIABILITY_MODE && line_hit[i]) begin
+                tag_parity_error_d[i] = (tag_rdata[i][CFG.TAG_WIDTH+2] == exp_tag_parity_bit_q) ? '0:'1; //check tag parity ^tag_rdata[i][CFG.TAG_WIDTH-1:0]) 
             end;
         end
         if (RELIABILITY_MODE) begin
-            tag_rsp_s.hit = |(line_hit & ~tag_parity_error);
+            tag_rsp_s.hit = |(line_hit & ~tag_parity_error_d);
+            faulty_hit = |(line_hit & tag_parity_error_d); //if correspondent bits are both one, there was a false hit
         end else begin
             tag_rsp_s.hit = |line_hit;
         end
@@ -208,9 +225,17 @@ module snitch_icache_lookup_serial #(
 
     // Buffer the metadata on a valid handshake. Stall on write (implicit in req_valid/ready)
     `FFL(tag_req_q, tag_req_d, req_valid && req_ready, '0, clk_i, rst_ni)
+    if(RELIABILITY_MODE) begin
+        `FFL(tag_parity_error_q, tag_parity_error_d, req_valid && req_ready, '0, clk_i, rst_ni)
+    end
     `FF(tag_valid, req_valid ? 1'b1 : tag_ready ? 1'b0 : tag_valid, '0, clk_i, rst_ni)
+    if(!RELIABILITY_MODE) begin
     // Ready if buffer is empy or downstream is reading. Stall on write
-    assign req_ready = (!tag_valid || tag_ready) && !tag_write;
+        assign req_ready = (!tag_valid || tag_ready) && !tag_write;
+    end else begin
+       // Ready if buffer is empy or downstream is reading. Stall on write
+        assign req_ready = (!tag_valid || tag_ready) && !tag_write; //procedure must be the same, we must have handshake with the data stage, in_ready_o set to 0 when invalidating
+    end
 
     // Register the handshake of the reg stage to buffer the tag output data in the next cycle
     `FF(req_handshake, req_valid && req_ready, 1'b0, clk_i, rst_ni)
