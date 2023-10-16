@@ -41,7 +41,7 @@ module snitch_icache_lookup_serial #(
 );
 
     localparam int unsigned DATA_ADDR_WIDTH = $clog2(CFG.SET_COUNT) + CFG.COUNT_ALIGN;
-    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? CFG.SET_COUNT : '0; 
+    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd4 : '0; 
 
     `ifndef SYNTHESIS
     initial assert(CFG != '0);
@@ -295,14 +295,14 @@ module snitch_icache_lookup_serial #(
     assign lookup_addr = {tag_rsp.cset, tag_req_q.addr[CFG.LINE_ALIGN +: CFG.COUNT_ALIGN]}; //eg if 256 line width Line_align is log2(nr of bytes), 2 set counts, i.e. 3 bits for line, 1 for set, take bits from 1 to 5
     assign write_addr  = {write_set_i, write_addr_i};
 
-    localparam WORD_WIDTH = CFG.LINE_WIDTH/CFG.SET_COUNT;
+    localparam LINE_SPLIT = CFG.LINE_WIDTH/DATA_PARITY_WIDTH;
     // Data bank port mux
     always_comb begin
 
         // Compute parity bit
         if (RELIABILITY_MODE) begin 
-            for (int i = 0; i < CFG.SET_COUNT; i++) begin
-                data_wdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] = ^write_data_i[CFG.LINE_WIDTH - WORD_WIDTH*i -1 -: WORD_WIDTH]; 
+            for (int i = 0; i < DATA_PARITY_WIDTH; i++) begin
+                data_wdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] = ^write_data_i[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
             end 
         end
 
@@ -334,16 +334,14 @@ module snitch_icache_lookup_serial #(
         .rdata_o ( data_rdata  )
     );
 
-    logic [CFG.SET_COUNT-1:0]   parity_error;
-    always_comb begin : p_parity_check
-        parity_error = '0;
-        if (RELIABILITY_MODE) begin 
-            for (int i = 0; i < CFG.SET_COUNT; i++) begin
-                parity_error[CFG.SET_COUNT-1-i] = (data_rdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] == ^data_rdata[CFG.LINE_WIDTH - WORD_WIDTH*i -1 -: WORD_WIDTH])? '0 : '1; 
+    logic [DATA_PARITY_WIDTH-1:0]   data_parity_error;
+    if (RELIABILITY_MODE) begin
+        always_comb begin : p_parity_check
+            data_parity_error = '0;
+            for (int i = 0; i < DATA_PARITY_WIDTH; i++) begin
+                data_parity_error[DATA_PARITY_WIDTH-1-i] = (data_rdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] == ^data_rdata[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT])? '0 : '1; 
             end 
         end
-
-
     end
 
     // Buffer the metadata on a valid handshake. Stall on write (implicit in tag_ready)
