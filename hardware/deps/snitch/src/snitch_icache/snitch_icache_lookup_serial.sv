@@ -9,7 +9,7 @@
 /// An actual cache lookup.
 module snitch_icache_lookup_serial #(
     parameter snitch_icache_pkg::config_t CFG = '0,
-    parameter logic RELIABILITY_MODE = '1 // Fault tolerance enabled setting it to 1
+    parameter logic RELIABILITY_MODE = '0 // Fault tolerance enabled setting it to 1
 )(
     input  logic                        clk_i,
     input  logic                        rst_ni,
@@ -63,6 +63,23 @@ module snitch_icache_lookup_serial #(
             init_count_q <= '0;
     end
 
+    //clock to generate some periodic faults (To be deleted)
+    localparam int FAULT_CYCLE = 10;
+    logic [$clog2(FAULT_CYCLE):0] fault_count_q;
+    logic          data_fault_inject, tag_fault_inject;
+
+    // We are always ready to flush
+    assign data_fault_inject = fault_count_q == FAULT_CYCLE;//fault_count_q%11 == FAULT_CYCLE/10; //for some timing it works, but there are handshaking problems
+    assign tag_fault_inject = '0; //fault_count_q == FAULT_CYCLE; //hard to reproduce a faulty hit
+    // Initialization and flush FSM
+    always_ff @(posedge clk_i, negedge rst_ni) begin
+        if (!rst_ni)
+            fault_count_q <= '0;
+        else
+            fault_count_q <= fault_count_q + 1;
+    end
+
+
     // --------------------------------------------------
     // Tag stage
     // --------------------------------------------------
@@ -76,6 +93,11 @@ module snitch_icache_lookup_serial #(
         logic                     hit;
         logic                     error;
     } tag_rsp_t;
+
+    typedef struct packed {
+        logic [CFG.FETCH_AW-1:0]     addr;
+        logic [CFG.SET_ALIGN-1:0]    cset;
+    } tag_inv_req_t;
 
     logic                       req_valid, req_ready;
     logic                       req_handshake;
@@ -93,24 +115,33 @@ module snitch_icache_lookup_serial #(
     logic [CFG.TAG_WIDTH-1:0]   required_tag;
     logic [CFG.SET_COUNT-1:0]   line_hit;
     logic [CFG.SET_COUNT-1:0]   tag_parity_error_d, tag_parity_error_q;
-    logic                       faulty_hit, faulty_data;
+    logic                       faulty_hit, faulty_data_d, faulty_data_q;
 
     logic [DATA_ADDR_WIDTH-1:0] lookup_addr;
     logic [DATA_ADDR_WIDTH-1:0] write_addr;
+
+    tag_inv_req_t               tag_inv_req_d, tag_inv_req_q;
 
     // Connect input requests to tag stage
     assign tag_req_d.addr = in_addr_i;
     assign tag_req_d.id   = in_id_i;
 
     // Multiplex read and write access to the tag banks onto one port, prioritizing write accesses
+    
+    logic tag_parity_bit;
     if (RELIABILITY_MODE) begin
-        assign tag_wdata [CFG.TAG_WIDTH+2] = ^write_tag_i;
+        always_comb begin
+            tag_parity_bit = ^write_tag_i;
+            if (faulty_data_q || faulty_hit) begin
+                tag_parity_bit = 1'b1;  //make sure also parity check fails, as the content of the tag is all zeros when invalid
+            end
+            tag_wdata [CFG.TAG_WIDTH+2] = tag_parity_bit;
+        end
     end
-
     always_comb begin
         tag_addr   = in_addr_i >> CFG.LINE_ALIGN; //if 128 line count, shift right 8 bits to get the tag (first 8 bits determine the line of the )
         tag_enable = '0;
-        tag_wdata[CFG.TAG_WIDTH+1:0]  = {1'b1, write_error_i, write_tag_i};
+        tag_wdata[CFG.TAG_WIDTH+1:0]  = {1'b1, write_error_i, write_tag_i} + tag_fault_inject;
         tag_write  = 1'b0;
 
         write_ready_o = 1'b0;
@@ -128,15 +159,20 @@ module snitch_icache_lookup_serial #(
             tag_enable    = $unsigned(1 << write_set_i);
             tag_write     = 1'b1;
             write_ready_o = 1'b1;
+        end else if (faulty_data_q && RELIABILITY_MODE) begin
+            //use data_req_q data to invalidate the address NO, it won't work
+            tag_addr                        = tag_inv_req_q.addr;
+            tag_enable                      = $unsigned(1 << tag_inv_req_q.cset);
+            tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
+            tag_write                       = 1'b1;
+            write_ready_o                   = 1'b1;   
         end else if (faulty_hit && RELIABILITY_MODE) begin //we need to set second bit (valid) of write data of the previous adress to 0
-            //in_ready_o = '0; //we do not accept new read request
-            // Request to store data in pipeline, zero as no new data
-            //req_valid  = 1'b0; 
-
-            tag_addr    = tag_req_q.addr; //buffered version of in_addr_i
-            tag_enable  = tag_parity_error_q; // which set must be written to (the faulty one(s))
-            tag_wdata[CFG.TAG_WIDTH+1:0]   = '0;
-            tag_write   = '1;
+            //we do not accept read requests and we do not store data in the pipeline.
+            tag_addr                        = tag_req_q.addr; //buffered version of in_addr_i
+            tag_enable                      = tag_parity_error_q; // which set must be written to (the faulty one(s))
+            tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
+            tag_write                       = 1'b1;
+            write_ready_o                   = 1'b1;
 
         end else if (in_valid_i) begin
             // Check cache
@@ -305,7 +341,7 @@ module snitch_icache_lookup_serial #(
         // Default read request
         data_addr   = lookup_addr;
         data_enable = tag_valid && tag_rsp.hit; // Only read data on hit
-        data_wdata[CFG.LINE_WIDTH -1:0]  = write_data_i; 
+        data_wdata[CFG.LINE_WIDTH -1:0]  = write_data_i + data_fault_inject; 
         data_write  = 1'b0;
         // Write takes priority
         if (!init_phase && write_valid_i) begin
@@ -338,7 +374,7 @@ module snitch_icache_lookup_serial #(
             for (int i = 0; i < DATA_PARITY_WIDTH; i++) begin
                 data_parity_error[DATA_PARITY_WIDTH-1-i] = (data_rdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] == ^data_rdata[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT])? '0 : '1; 
             end 
-            faulty_data = |data_parity_error;
+            faulty_data_d = |data_parity_error;
         end
     end
     // Buffer the metadata on a valid handshake. Stall on write (implicit in tag_ready)
@@ -356,11 +392,22 @@ module snitch_icache_lookup_serial #(
     `FFL(data_rsp_q, data_rdata, tag_handshake && !data_ready, '0, clk_i, rst_ni)
     assign out_data_o = tag_handshake ? data_rdata : data_rsp_q;
 
+    // Buffer the metadata when there is faulty data for the invalidation procedure
+    if (RELIABILITY_MODE) begin 
+        assign tag_inv_req_d.addr = data_req_q.addr;
+        assign tag_inv_req_d.cset = data_req_q.id;
+        //`FF(faulty_data_q, faulty_data_d && tag_handshake, '0, clk_i, rst_ni);
+        assign faulty_data_q = faulty_data_d;
+        `FFL(tag_inv_req_q, tag_inv_req_d, faulty_data_q && tag_handshake, '0, clk_i, rst_ni)
+    end
+    
+
+
     // Generate the remaining output signals.
     assign out_addr_o  = data_req_q.addr;
     assign out_id_o    = data_req_q.id;
     assign out_set_o   = data_req_q.cset;
-    assign out_hit_o   = data_req_q.hit;
+    assign out_hit_o   = data_req_q.hit && !(faulty_data_q && RELIABILITY_MODE);
     assign out_error_o = data_req_q.error;
     assign out_valid_o = data_valid;
     assign data_ready  = out_ready_i;
