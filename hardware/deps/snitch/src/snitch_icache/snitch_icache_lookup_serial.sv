@@ -164,7 +164,7 @@ module snitch_icache_lookup_serial #(
             tag_enable    = $unsigned(1 << write_set_i);
             tag_write     = 1'b1;
             write_ready_o = 1'b1;
-        end else if (data_parity_inv_q.parity_error && RELIABILITY_MODE) begin
+        end else if (data_fault_valid && RELIABILITY_MODE) begin
             //use data_req_q data to invalidate the address NO, it won't work
             tag_addr                        = data_parity_inv_q.addr;
             tag_enable                      = $unsigned(1 << data_parity_inv_q.cset);
@@ -172,6 +172,7 @@ module snitch_icache_lookup_serial #(
             tag_write                       = 1'b1;
             write_ready_o                   = 1'b1;   
             //data_fault_ready                = 1'b1;
+            $display("Invalidating address %h", tag_addr);
         end else if (faulty_hit && RELIABILITY_MODE) begin //we need to set second bit (valid) of write data of the previous adress to 0
             //we do not accept read requests and we do not store data in the pipeline.
             tag_addr                        = tag_req_q.addr; //buffered version of in_addr_i
@@ -403,9 +404,7 @@ module snitch_icache_lookup_serial #(
     if (RELIABILITY_MODE) begin 
         assign data_parity_inv_d.addr = data_req_q.addr;
         assign data_parity_inv_d.cset = data_req_q.id;
-
-        `FFL(data_parity_inv_q, data_fault_ready ? data_parity_inv_d : '0, data_valid, '0, clk_i, rst_ni);
-
+        `FFL(data_parity_inv_q, data_fault_ready && tag_handshake ? data_parity_inv_d : '0, data_valid, '0, clk_i, rst_ni);
     end
     
 
