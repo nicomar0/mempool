@@ -349,7 +349,8 @@ module snitch_icache_lookup_serial #(
         // Default read request
         data_addr   = lookup_addr;
         data_enable = tag_valid && tag_rsp.hit; // Only read data on hit
-        data_wdata[CFG.LINE_WIDTH -1:0]  = write_data_i + data_fault_inject; 
+        data_wdata[CFG.LINE_WIDTH -1:1] = write_data_i[CFG.LINE_WIDTH -1:1];
+        data_wdata[0]                   = write_data_i[0] ^ data_fault_inject; 
         data_write  = 1'b0;
         // Write takes priority
         if (!init_phase && write_valid_i) begin
