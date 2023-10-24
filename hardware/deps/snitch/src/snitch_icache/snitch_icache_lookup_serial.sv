@@ -64,11 +64,11 @@ module snitch_icache_lookup_serial #(
     end
 
     //clock to generate some periodic faults (To be deleted)
-    localparam int FAULT_CYCLE = 8;
+    localparam int FAULT_CYCLE = 100;
     logic [$clog2(FAULT_CYCLE):0] fault_count_q;
     logic          data_fault_inject, tag_fault_inject;
 
-    assign data_fault_inject = fault_count_q == FAULT_CYCLE;//fault_count_q%11 == FAULT_CYCLE/10; //for some timing it works, but there are handshaking problems
+    assign data_fault_inject = '0;//fault_count_q == FAULT_CYCLE;//fault_count_q%11 == FAULT_CYCLE/10; //for some timing it works, but there are handshaking problems
     assign tag_fault_inject = '0; //fault_count_q == FAULT_CYCLE; //hard to reproduce a faulty hit
     // Initialization and flush FSM
     always_ff @(posedge clk_i, negedge rst_ni) begin

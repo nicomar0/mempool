@@ -278,7 +278,8 @@ module snitch_read_only_cache_tb import snitch_pkg::*; #(
     parameter int unsigned AxiIdWidth   = 5,
     parameter int unsigned LineWidth    = debug? 64:256,
     parameter int unsigned LineCount    = debug? 32:128,
-    parameter int unsigned SetCount     = 2
+    parameter int unsigned SetCount     = 2,
+    parameter int unsigned FaultFreq    = 10 
 );
 
   localparam time ClkPeriod = 10ns;
@@ -312,7 +313,7 @@ module snitch_read_only_cache_tb import snitch_pkg::*; #(
   // backing memory
   logic [LineWidth-1:0] memory [logic [AxiAddrWidth-1:0]];
 
-  logic  clk, rst;
+  logic  clk, rst, fault_clk;
 
   typedef semirand_axi_master #(
     .AW                   ( AxiAddrWidth ),
@@ -694,6 +695,14 @@ module snitch_read_only_cache_tb import snitch_pkg::*; #(
     forever begin
       #(ClkPeriod/2) clk = 0;
       #(ClkPeriod/2) clk = 1;
+    end
+  end
+
+  // Fault injection clock generation
+  initial begin
+    forever begin
+      #(ClkPeriod/2*FaultFreq) fault_clk = 0;
+      #(ClkPeriod/2*FaultFreq) fault_clk = 1;
     end
   end
 endmodule
