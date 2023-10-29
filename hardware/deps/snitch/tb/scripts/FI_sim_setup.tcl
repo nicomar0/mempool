@@ -8,6 +8,7 @@ vsim snitch_read_only_cache_tb_opt -voptargs=+acc
 add wave -noupdate -expand -group lookup /snitch_read_only_cache_tb/dut/i_lookup/*
 add wave -noupdate -group handler /snitch_read_only_cache_tb/dut/i_handler/*
 add wave -noupdate -group refill /snitch_read_only_cache_tb/dut/i_refill/*
+add wave -noupdate -group top /snitch_read_only_cache_tb/dut/*
 
 do ../fault_injection/ROC_inject_fault.tcl
 

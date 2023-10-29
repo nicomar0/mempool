@@ -271,15 +271,15 @@ class const_axi_slave #(
 endclass
 
 `include "common_cells/assertions.svh"
-localparam debug = 0;
+localparam debug = 1;
 module snitch_read_only_cache_tb import snitch_pkg::*; #(
     parameter int unsigned AxiAddrWidth = 32,
     parameter int unsigned AxiDataWidth = debug? 32:128,
     parameter int unsigned AxiIdWidth   = 5,
-    parameter int unsigned LineWidth    = debug? 64:256,
+    parameter int unsigned LineWidth    = debug? 32:256,
     parameter int unsigned LineCount    = debug? 32:128,
-    parameter int unsigned SetCount     = 2,
-    parameter int unsigned FaultFreq    = 10 
+    parameter int unsigned SetCount     = debug? 2:2,
+    parameter int unsigned FaultFreq    = 200
 );
 
   localparam time ClkPeriod = 10ns;
@@ -600,8 +600,11 @@ module snitch_read_only_cache_tb import snitch_pkg::*; #(
               exp_data[i*32 +: 32] = aligned_addr + (4*i);
             end
             if (r_beat.data != exp_data) begin
-              $display("Error (%0t): Wrong data. Addr=0x%x, Beat=%d, Size=%d Aqc=0x%x Exp=0x%x",
-                       $time, ar_beat.addr, no_r_beat[i], ar_beat.size, r_beat.data, exp_data);
+              $display("Error (%0t): Wrong data. Addr=0x%x (idx=%h), Beat=%d, Size=%d Aqc=0x%x Exp=0x%x",
+                       $time, ar_beat.addr, ar_beat.addr[2+:5], no_r_beat[i], ar_beat.size, r_beat.data, exp_data);
+            //end else begin
+            //  $display("(%0t): Correct data. Addr=0x%x, Beat=%d, Size=%d Aqc=0x%x Exp=0x%x",
+            //           $time, ar_beat.addr, no_r_beat[i], ar_beat.size, r_beat.data, exp_data);
             end
 
             if (r_beat.last && !(ar_beat.len == no_r_beat[i])) begin
