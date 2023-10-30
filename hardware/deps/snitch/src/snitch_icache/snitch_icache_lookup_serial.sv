@@ -132,7 +132,7 @@ module snitch_icache_lookup_serial #(
         end
     end
 
-    assign data_fault_valid = data_parity_inv_q.parity_error;
+    assign data_fault_valid = RELIABILITY_MODE ? data_parity_inv_q.parity_error : '0;
     always_comb begin
         tag_addr   = in_addr_i >> CFG.LINE_ALIGN; //if 128 line count, shift right 8 bits to get the index
         tag_enable = '0;
@@ -151,6 +151,7 @@ module snitch_icache_lookup_serial #(
             tag_write  = 1'b1;
         end else if (data_fault_valid && RELIABILITY_MODE) begin
             tag_addr                        = data_parity_inv_q.addr >> CFG.LINE_ALIGN;
+            //$display("invalidation addr: %h,\n %b\n tag_addr: %h, LA=%d, CA=%d", data_parity_inv_q.addr, data_parity_inv_q.addr, tag_addr, CFG.LINE_ALIGN, CFG.COUNT_ALIGN );
             tag_enable                      = $unsigned(1 << data_parity_inv_q.cset);
             tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
             tag_write                       = 1'b1;  
@@ -168,7 +169,6 @@ module snitch_icache_lookup_serial #(
             tag_enable                      = tag_parity_error_q; // which set must be written to (the faulty one(s))
             tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
             tag_write                       = 1'b1;
-            if (clk_i == '0) $display("[ROcache_lookup]: TagFault -> Invalidating address %h", tag_req_q.addr);
         end else if (in_valid_i) begin
             // Check cache
             tag_enable = '1;
@@ -178,9 +178,9 @@ module snitch_icache_lookup_serial #(
         end
     end
     always @ (posedge clk_i) begin
-        if(data_fault_valid && RELIABILITY_MODE) $display("%t [ROcache_lookup]: DataFault -> Invalidating address %h, index: %h", $time, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
+        if(data_fault_valid && RELIABILITY_MODE) $display("%t [ROcache_lookup]: DataFault -> Invalidating address %h, index: %h, set %h", $time, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
         else if(faulty_hit && RELIABILITY_MODE) $display("%t [ROcache_lookup]: TagFault -> Invalidating address %h, index: %h", $time, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
-        //if(out_valid_o && out_ready_i && out_data_o == '0) $display("(%t) [ROcache_lookup]: ReadData at Address %h (idx %h) is %h", $time, out_addr_o, out_addr_o[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], out_data_o);
+        //if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h (idx %h) set %h", $time, write_addr_i, write_set_i);
     end
 
     // Instantiate the tag sets.
@@ -287,7 +287,7 @@ module snitch_icache_lookup_serial #(
             tag_rsp_d = tag_rsp_s;
         end
         // Override the hit if the write that stalled us invalidated the data
-        if (lookup_addr == write_addr && write_valid_i && write_ready_o) begin
+        if ((lookup_addr == write_addr) && write_valid_i && write_ready_o) begin
             tag_rsp_d.hit = 1'b0;
         end
     end
@@ -338,7 +338,7 @@ module snitch_icache_lookup_serial #(
     // Compute parity bit
     if (RELIABILITY_MODE) begin 
         for (genvar i = 0; i < DATA_PARITY_WIDTH; i++) begin
-            assign data_wdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] = ^write_data_i[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
+            assign data_wdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] = ~^write_data_i[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
         end 
     end
     always_comb begin
@@ -353,6 +353,8 @@ module snitch_icache_lookup_serial #(
             data_enable = 1'b1;
             data_write  = 1'b1;
         end
+        assert property ( @(posedge clk_i) tag_write && write_valid_i |-> data_write ) else $error("Writing tag but not data");
+        assert property ( @(posedge clk_i) data_write && write_valid_i |-> tag_write ) else $error("Writing data but not tag");
     end
 
     tc_sram #(
@@ -369,6 +371,10 @@ module snitch_icache_lookup_serial #(
         .be_i    ( '1          ),
         .rdata_o ( data_rdata  )
     );
+    always @ (posedge clk_i) begin
+        if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h set %h", $time, write_addr_i, write_set_i);
+        //if(out_valid_o && hit_invalid && out_ready_i) $display("(%t) [ROcache_lookup]: Wrong data 0x%x (addr=%h) invalidated", $time, out_data_o, out_addr_o);
+    end
 
     // Parity check
     logic [DATA_PARITY_WIDTH-1:0]   data_parity_error;
@@ -376,7 +382,7 @@ module snitch_icache_lookup_serial #(
         always_comb begin : p_parity_check
             data_parity_error = '0;
             for (int i = 0; i < DATA_PARITY_WIDTH; i++) begin
-                data_parity_error[DATA_PARITY_WIDTH-1-i] = (data_rdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] == ^data_rdata[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT])? '0 : '1; 
+                data_parity_error[DATA_PARITY_WIDTH-1-i] = (data_rdata[CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - i] == ~^data_rdata[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT])? '0 : '1; 
             end 
             data_parity_inv_d.parity_error = |data_parity_error;
         end
