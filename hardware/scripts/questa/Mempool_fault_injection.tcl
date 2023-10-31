@@ -30,12 +30,9 @@ proc base_path {} {return "/snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_ta
 #/snitch_read_only_cache_tb/dut/i_lookup/i_data/sram 
 
 set inject_register_netlist {
-    
-    /snitch_read_only_cache_tb/dut/i_lookup/i_data/sram
+    /snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_tag/sram
 }
-#/snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_tag/sram
-#
-
+#/snitch_read_only_cache_tb/dut/i_lookup/i_data/sram
 set inject_signals_netlist []
 set output_netlist []
 set next_state_netlist []

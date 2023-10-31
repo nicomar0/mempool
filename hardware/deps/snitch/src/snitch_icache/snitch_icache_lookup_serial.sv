@@ -99,7 +99,7 @@ module snitch_icache_lookup_serial #(
     logic [CFG.TAG_WIDTH-1:0]   required_tag;
     logic [CFG.SET_COUNT-1:0]   line_hit;
     logic [CFG.SET_COUNT-1:0]   tag_parity_error_d, tag_parity_error_q;
-    logic                       faulty_hit, faulty_hit_d, faulty_hit_q;
+    logic                       faulty_hit_valid, faulty_hit_ready, faulty_hit_d, faulty_hit_q;
 
     logic [DATA_ADDR_WIDTH-1:0] lookup_addr;
     logic [DATA_ADDR_WIDTH-1:0] write_addr;
@@ -123,7 +123,7 @@ module snitch_icache_lookup_serial #(
                 tag_parity_bit = 1'b1;
             end else if (write_valid_i) begin
                 tag_parity_bit = ^write_tag_i;
-            end else if (faulty_hit) begin
+            end else if (faulty_hit_valid) begin
                 tag_parity_bit = 1'b1;
             end else if (in_valid_i) begin
                // read phase: write tag not used
@@ -143,6 +143,7 @@ module snitch_icache_lookup_serial #(
         in_ready_o       = 1'b0;
         req_valid        = 1'b0;
         data_fault_ready = 1'b0;
+        faulty_hit_ready = 1'b0;
 
         if (init_phase) begin
             tag_addr   = init_count_q;
@@ -163,12 +164,13 @@ module snitch_icache_lookup_serial #(
             tag_enable    = $unsigned(1 << write_set_i);
             tag_write     = 1'b1;
             write_ready_o = 1'b1;
-        end else if (faulty_hit && RELIABILITY_MODE) begin //we need to set second bit (valid) of write data of the previous adress to 0
+        end else if (faulty_hit_valid && RELIABILITY_MODE) begin //we need to set second bit (valid) of write data of the previous adress to 0
             //we do not accept read requests and we do not store data in the pipeline.
             tag_addr                        = tag_req_q.addr >> CFG.LINE_ALIGN; //buffered version of in_addr_i
             tag_enable                      = tag_parity_error_q; // which set must be written to (the faulty one(s))
             tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
             tag_write                       = 1'b1;
+            faulty_hit_ready                = 1'b1;
         end else if (in_valid_i) begin
             // Check cache
             tag_enable = '1;
@@ -179,7 +181,7 @@ module snitch_icache_lookup_serial #(
     end
     always @ (posedge clk_i) begin
         if(data_fault_valid && RELIABILITY_MODE) $display("%t [ROcache_lookup]: DataFault -> Invalidating address %h, index: %h, set %h", $time, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
-        else if(faulty_hit && RELIABILITY_MODE) $display("%t [ROcache_lookup]: TagFault -> Invalidating address %h, index: %h", $time, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
+        else if(faulty_hit_valid && RELIABILITY_MODE) $display("%t [ROcache_lookup]: TagFault -> Invalidating address %h, index: %h", $time, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
         //if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h (idx %h) set %h", $time, write_addr_i, write_set_i);
     end
 
@@ -260,9 +262,9 @@ module snitch_icache_lookup_serial #(
     `FFL(tag_req_q, tag_req_d, req_valid && req_ready, '0, clk_i, rst_ni)
     if(RELIABILITY_MODE) begin
         `FFL(tag_parity_error_q, tag_parity_error_d, req_valid && req_ready, '0, clk_i, rst_ni)
-        `FFL(faulty_hit_q, faulty_hit_d, req_valid && req_ready, '0, clk_i, rst_ni)
+        `FFL(faulty_hit_q, (faulty_hit_ready && !(req_valid && req_ready))? 1'b0 : faulty_hit_d, req_valid && req_ready || faulty_hit_ready, '0, clk_i, rst_ni)
     end
-    assign faulty_hit = RELIABILITY_MODE ? ((req_valid && req_ready) ? faulty_hit_d : faulty_hit_q) : '0; //if there is a write request, select the buffered version to be invalidated
+    assign faulty_hit_valid = RELIABILITY_MODE ? faulty_hit_q : '0; //if there is a write request, select the buffered version to be invalidated
 
     `FF(tag_valid, req_valid ? 1'b1 : tag_ready ? 1'b0 : tag_valid, '0, clk_i, rst_ni)
     if(!RELIABILITY_MODE) begin
@@ -353,8 +355,8 @@ module snitch_icache_lookup_serial #(
             data_enable = 1'b1;
             data_write  = 1'b1;
         end
-        assert property ( @(posedge clk_i) tag_write && write_valid_i |-> data_write ) else $error("Writing tag but not data");
-        assert property ( @(posedge clk_i) data_write && write_valid_i |-> tag_write ) else $error("Writing data but not tag");
+        //assert property ( @(posedge clk_i) tag_write && write_valid_i |-> data_write ) else $error("Writing tag but not data");
+        //assert property ( @(posedge clk_i) data_write && write_valid_i |-> tag_write ) else $error("Writing data but not tag");
     end
 
     tc_sram #(

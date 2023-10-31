@@ -26,15 +26,29 @@ proc base_path {} {return "/snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_ta
 
 
 #set inject_register_netlist [find nets [base_path]/*]
-#/snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_tag/sram
-#/snitch_read_only_cache_tb/dut/i_lookup/i_data/sram 
-
 set inject_register_netlist {
     
-    /snitch_read_only_cache_tb/dut/i_lookup/i_data/sram
 }
+
+# Set the path to the SRAM
+set itag_sram_path "/snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_tag/sram"
+
+# Determine the maximum possible index for the first index
+set max_first_index 31 ; # Replace with the actual maximum value
+
+# Determine the largest possible second index
+set max_second_index 57 ; # Replace with the actual maximum value
+
+# Add the signal paths with maximum indices to the inject_register_netlist
+for {set index $max_first_index} {$index >= 0} {incr index -1} {
+    set signal_path "${itag_sram_path}[${index}][${max_second_index}]"
+    lappend inject_register_netlist $signal_path
+}
+lappend inject_register_netlist /snitch_read_only_cache_tb/dut/i_lookup/i_data/sram
+
+#/snitch_read_only_cache_tb/dut/i_lookup/i_data/sram
 #/snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_tag/sram
-#
+
 
 set inject_signals_netlist []
 set output_netlist []
