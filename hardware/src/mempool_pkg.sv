@@ -27,6 +27,7 @@ package mempool_pkg;
   localparam integer unsigned AxiDataWidth     = `ifdef AXI_DATA_WIDTH `AXI_DATA_WIDTH `else 0 `endif;
   localparam integer unsigned AxiLiteDataWidth = 32;
 
+
   /***********************
    *  MEMORY PARAMETERS  *
    ***********************/
@@ -134,6 +135,7 @@ package mempool_pkg;
   localparam int unsigned ICacheSizeByte  = 512 * NumCoresPerCache;     // Total Size of instruction cache in bytes
   localparam int unsigned ICacheSets      = NumCoresPerCache / 2;       // Number of sets
   localparam int unsigned ICacheLineWidth = 32 * 2 * NumCoresPerCache;  // Size of each cache line in bits
+    // TODO: add RELIABILITY ICACHE/ RO parameters
 
   /*********************
    *  READ-ONLY CACHE  *

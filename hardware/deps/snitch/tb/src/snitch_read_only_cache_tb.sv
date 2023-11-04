@@ -271,7 +271,7 @@ class const_axi_slave #(
 endclass
 
 `include "common_cells/assertions.svh"
-localparam debug = 1;
+localparam debug = 0;
 module snitch_read_only_cache_tb import snitch_pkg::*; #(
     parameter int unsigned AxiAddrWidth = 32,
     parameter int unsigned AxiDataWidth = debug? 32:128,
@@ -602,6 +602,7 @@ module snitch_read_only_cache_tb import snitch_pkg::*; #(
             if (r_beat.data != exp_data) begin
               $display("Error (%0t): Wrong data. Addr=0x%x (idx=%h), Beat=%d, Size=%d Aqc=0x%x Exp=0x%x",
                        $time, ar_beat.addr, ar_beat.addr[2+:5], no_r_beat[i], ar_beat.size, r_beat.data, exp_data);
+                       //$finish();
             //end else begin
             //  $display("(%0t): Correct data. Addr=0x%x, Beat=%d, Size=%d Aqc=0x%x Exp=0x%x",
             //           $time, ar_beat.addr, no_r_beat[i], ar_beat.size, r_beat.data, exp_data);
