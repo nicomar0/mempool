@@ -26,6 +26,8 @@ module snitch_icache #(
     parameter int FILL_AW = -1,
     /// Fill interface data width. Power of two; >= 8.
     parameter int FILL_DW = -1,
+    /// Add parity checks in the lookup module
+    parameter bit RELIABILITY = 0,
     /// Replace the L1 tag banks with latch-based SCM.
     parameter bit L1_TAG_SCM = 0,
     /// This reduces area impact at the cost of
@@ -42,6 +44,7 @@ module snitch_icache #(
     parameter int L0_EARLY_TAG_WIDTH = -1,
     /// Operate L0 cache in slower clock-domain
     parameter bit ISO_CROSSING      = 1,
+
     parameter type axi_req_t = logic,
     parameter type axi_rsp_t = logic
 ) (
@@ -79,6 +82,7 @@ module snitch_icache #(
         FETCH_DW:           FETCH_DW,
         FILL_AW:            FILL_AW,
         FILL_DW:            FILL_DW,
+        ENABLE_RELIABILITY: RELIABILITY,
         L1_TAG_SCM:         L1_TAG_SCM,
         EARLY_LATCH:        EARLY_LATCH,
         BUFFER_LOOKUP:      0,

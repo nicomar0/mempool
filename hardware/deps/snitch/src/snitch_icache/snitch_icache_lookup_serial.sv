@@ -8,8 +8,7 @@
 
 /// An actual cache lookup.
 module snitch_icache_lookup_serial #(
-    parameter snitch_icache_pkg::config_t CFG = '0,
-    parameter logic RELIABILITY_MODE = '1 // Fault tolerance enabled setting it to 1
+    parameter snitch_icache_pkg::config_t CFG = '0
 )(
     input  logic                        clk_i,
     input  logic                        rst_ni,
@@ -39,9 +38,9 @@ module snitch_icache_lookup_serial #(
     input  logic                        write_valid_i,
     output logic                        write_ready_o
 );
-
+    localparam bit RELIABILITY_MODE = CFG.ENABLE_RELIABILITY;
     localparam int unsigned DATA_ADDR_WIDTH = $clog2(CFG.SET_COUNT) + CFG.COUNT_ALIGN;
-    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd4 : '0; 
+    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd4 : '0; // TODO: propagate it up as a parameter
 
     `ifndef SYNTHESIS
     initial assert(CFG != '0);
@@ -374,7 +373,7 @@ module snitch_icache_lookup_serial #(
         .rdata_o ( data_rdata  )
     );
     always @ (posedge clk_i) begin
-        if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h set %h", $time, write_addr_i, write_set_i);
+        //if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h set %h", $time, write_addr_i, write_set_i);
         //if(out_valid_o && hit_invalid && out_ready_i) $display("(%t) [ROcache_lookup]: Wrong data 0x%x (addr=%h) invalidated", $time, out_data_o, out_addr_o);
     end
 

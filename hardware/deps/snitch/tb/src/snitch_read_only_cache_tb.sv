@@ -279,6 +279,7 @@ module snitch_read_only_cache_tb import snitch_pkg::*; #(
     parameter int unsigned LineWidth    = debug? 32:256,
     parameter int unsigned LineCount    = debug? 32:128,
     parameter int unsigned SetCount     = debug? 2:2,
+    parameter bit          Reliability  = 1'b1,
     parameter int unsigned FaultFreq    = 200
 );
 
@@ -393,6 +394,7 @@ module snitch_read_only_cache_tb import snitch_pkg::*; #(
     .LineWidth    ( LineWidth      ),
     .LineCount    ( LineCount      ),
     .SetCount     ( SetCount       ),
+    .Reliability  ( Reliability    ),
     .AxiAddrWidth ( AxiAddrWidth   ),
     .AxiDataWidth ( AxiDataWidth   ),
     .AxiIdWidth   ( AxiInIdWidth   ),
