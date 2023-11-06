@@ -70,6 +70,6 @@ xqueue_size ?= 0
 xpulpimg ?= 1
 
 # Enable the Reliability mode for RO caches and L1 icache
-rel_rocache ?= 0
+rel_rocache ?= 1
 
-rel_l1icache ?= 0 
+rel_l1icache ?= 1
