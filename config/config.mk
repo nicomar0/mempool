@@ -73,3 +73,9 @@ xpulpimg ?= 1
 rel_rocache ?= 1
 
 rel_l1icache ?= 1
+
+# Enable fault injection in the instruction caches and define fault rate (clok_periods/fault)
+
+fault_injection ?= 0
+
+fault_rate ?= 100

@@ -98,6 +98,8 @@ vlog_defs += -DDMAS_PER_GROUP=$(dmas_per_group)
 vlog_defs += -DAXI_HIER_RADIX=$(axi_hier_radix) -DAXI_MASTERS_PER_GROUP=$(axi_masters_per_group)
 vlog_defs += -DSEQ_MEM_SIZE=$(seq_mem_size) -DXQUEUE_SIZE=$(xqueue_size)
 vlog_defs += -DREL_ROCACHE=$(rel_rocache) -DREL_L1ICACHE=$(rel_l1icache)
+vlog_defs += -DFAULT_INJECTION_ICACHE=$(fault_injection) 
+vlog_defs += -DFAULT_RATE=$(fault_rate)
 
 # Traffic generation enabled
 ifdef tg
