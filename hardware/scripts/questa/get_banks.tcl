@@ -7,6 +7,7 @@ set ROC_tag_list [list] ;
 foreach inst $inst_list {
  set ipath [lindex $inst 0]
  if {[string match $pattern_match $ipath]} {
+ append ipath "/sram"
  lappend ROC_tag_list $ipath
  }
 }
@@ -14,16 +15,16 @@ foreach inst $inst_list {
 # no architecture names
 #
 # Begin sorting list
-set ROC_tag_list [lsort -dictionary $ROC_tag_list]
-# Open a file to write out the list
-
-set fhandle [open "ROC_tag.txt" w]
-foreach inst $ROC_tag_list {
- # Print instance path, one per line
- puts $fhandle $inst
-}
-# Close the file, done.
-close $fhandle ; 
+#set ROC_tag_list [lsort -dictionary $ROC_tag_list]
+## Open a file to write out the list
+#
+#set fhandle [open "ROC_tag.txt" w]
+#foreach inst $ROC_tag_list {
+# # Print instance path, one per line
+# puts $fhandle $inst
+#}
+## Close the file, done.
+#close $fhandle ; 
 
 
 
@@ -34,15 +35,16 @@ set L1_tag_list [list] ;
 foreach inst $inst_list {
  set ipath [lindex $inst 0]
  if {[string match $pattern_match $ipath]} {
+ append ipath "/MemContentxDP"
  lappend L1_tag_list $ipath
  }
 }
-set L1_tag_list [lsort -dictionary $L1_tag_list]
-set fhandle [open "L1I_tag.txt" w]
-foreach inst $L1_tag_list {
- puts $fhandle $inst
-}
-close $fhandle ; 
+#set L1_tag_list [lsort -dictionary $L1_tag_list]
+#set fhandle [open "L1I_tag.txt" w]
+#foreach inst $L1_tag_list {
+# puts $fhandle $inst
+#}
+#close $fhandle ; 
 
 
 
@@ -53,15 +55,16 @@ set ROC_data_list [list] ;
 foreach inst $inst_list {
  set ipath [lindex $inst 0]
  if {[string match $pattern_match $ipath]} {
+ append ipath "/sram"
  lappend ROC_data_list $ipath
  }
 }
-set ROC_data_list [lsort -dictionary $ROC_data_list]
-set fhandle [open "ROC_data.txt" w]
-foreach inst $ROC_data_list {
- puts $fhandle $inst
-}
-close $fhandle ; 
+#set ROC_data_list [lsort -dictionary $ROC_data_list]
+#set fhandle [open "ROC_data.txt" w]
+#foreach inst $ROC_data_list {
+# puts $fhandle $inst
+#}
+#close $fhandle ; 
 
 
 
@@ -72,12 +75,13 @@ set L1_data_list [list] ;
 foreach inst $inst_list {
  set ipath [lindex $inst 0]
  if {[string match $pattern_match $ipath]} {
+ append ipath "/sram"
  lappend L1_data_list $ipath
  }
 }
-set L1_data_list [lsort -dictionary $L1_data_list]
-set fhandle [open "L1I_data.txt" w]
-foreach inst $L1_data_list {
- puts $fhandle $inst
-}
-close $fhandle ; 
+#set L1_data_list [lsort -dictionary $L1_data_list]
+#set fhandle [open "L1I_data.txt" w]
+#foreach inst $L1_data_list {
+# puts $fhandle $inst
+#}
+#close $fhandle ; 
