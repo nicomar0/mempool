@@ -38,9 +38,9 @@ module snitch_icache_lookup_serial #(
     input  logic                        write_valid_i,
     output logic                        write_ready_o
 );
-    localparam bit RELIABILITY_MODE = CFG.ENABLE_RELIABILITY;
+    localparam int RELIABILITY_MODE = CFG.ENABLE_RELIABILITY;
     localparam int unsigned DATA_ADDR_WIDTH = $clog2(CFG.SET_COUNT) + CFG.COUNT_ALIGN;
-    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd4 : '0; // TODO: propagate it up as a parameter
+    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd8 : '0; // TODO: propagate it up as a parameter
 
     `ifndef SYNTHESIS
     initial assert(CFG != '0);
@@ -408,6 +408,7 @@ module snitch_icache_lookup_serial #(
     if (RELIABILITY_MODE) begin 
         assign data_parity_inv_d.addr = data_req_q.addr;
         assign data_parity_inv_d.cset = data_req_q.id;
+        // add check that next address is different from previous one
         `FFL(data_parity_inv_q, (data_fault_ready && !tag_handshake) ? '0 : data_parity_inv_d, tag_handshake || data_fault_ready, '0, clk_i, rst_ni) //reset value when it has been invalidated and there is no new value
         `FFL(hit_invalid_q, data_parity_inv_d.parity_error, tag_handshake, '0, clk_i, rst_ni)
     end
