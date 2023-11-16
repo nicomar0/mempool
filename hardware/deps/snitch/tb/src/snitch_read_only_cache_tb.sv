@@ -271,7 +271,7 @@ class const_axi_slave #(
 endclass
 
 `include "common_cells/assertions.svh"
-localparam debug = 0;
+localparam debug = 1;
 module snitch_read_only_cache_tb import snitch_pkg::*; #(
     parameter int unsigned AxiAddrWidth = 32,
     parameter int unsigned AxiDataWidth = debug? 32:128,

@@ -40,7 +40,7 @@ module snitch_icache_lookup_serial #(
 );
     localparam int RELIABILITY_MODE = CFG.ENABLE_RELIABILITY;
     localparam int unsigned DATA_ADDR_WIDTH = $clog2(CFG.SET_COUNT) + CFG.COUNT_ALIGN;
-    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd8 : '0; // TODO: propagate it up as a parameter
+    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd4 : '0; // TODO: propagate it up as a parameter
 
     `ifndef SYNTHESIS
     initial assert(CFG != '0);
@@ -256,7 +256,8 @@ module snitch_icache_lookup_serial #(
         .cnt_o    ( tag_rsp_s.cset ),
         .empty_o  (                )
     );
-
+    //assert property (@(negedge clk_i) |tag_enable && in_ready_o |-> ##1 $countones(line_hit) <=1 ) else $error("two or more sets hit!, index=%h, address=%h", tag_req_q.addr >> CFG.LINE_ALIGN, tag_req_q.addr);
+    //assert property (@(negedge clk_i) |tag_enable && in_ready_o |-> ##1 tag_rdata[0] != tag_rdata[1] || ((tag_rdata[0] == tag_rdata[1]) && !tag_rdata[0][CFG.TAG_WIDTH+1])) else $error("two sets with same tag!, tag1=%h, tag2=%h", tag_rdata[0], tag_rdata[1]);
     // Buffer the metadata on a valid handshake. Stall on write (implicit in req_valid/ready)
     `FFL(tag_req_q, tag_req_d, req_valid && req_ready, '0, clk_i, rst_ni)
     if(RELIABILITY_MODE) begin
@@ -409,6 +410,8 @@ module snitch_icache_lookup_serial #(
         assign data_parity_inv_d.addr = data_req_q.addr;
         assign data_parity_inv_d.cset = data_req_q.id;
         // add check that next address is different from previous one
+        //assign same_invalidation_address = (data_req_q.addr == data_parity_inv_q.addr) && hit_invalid; //if address is the same as before, no need to invalidate it again
+        ///*|| (tag_handshake && same_invalidation_address)*/) ? /*{data_parity_inv_q.addr, data_parity_inv_q.cset, 1'b0}*/
         `FFL(data_parity_inv_q, (data_fault_ready && !tag_handshake) ? '0 : data_parity_inv_d, tag_handshake || data_fault_ready, '0, clk_i, rst_ni) //reset value when it has been invalidated and there is no new value
         `FFL(hit_invalid_q, data_parity_inv_d.parity_error, tag_handshake, '0, clk_i, rst_ni)
     end
