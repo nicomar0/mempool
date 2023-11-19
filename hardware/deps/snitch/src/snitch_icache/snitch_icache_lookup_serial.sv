@@ -38,7 +38,7 @@ module snitch_icache_lookup_serial #(
     input  logic                        write_valid_i,
     output logic                        write_ready_o
 );
-    localparam int RELIABILITY_MODE = 1'b1; //CFG.ENABLE_RELIABILITY;
+    localparam int RELIABILITY_MODE = CFG.ENABLE_RELIABILITY;
     localparam int unsigned DATA_ADDR_WIDTH = $clog2(CFG.SET_COUNT) + CFG.COUNT_ALIGN;
     localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd4 : '0; // TODO: propagate it up as a parameter
 
@@ -150,7 +150,7 @@ module snitch_icache_lookup_serial #(
             tag_wdata[CFG.TAG_WIDTH+1:0]  = '0;
             tag_write  = 1'b1;
         end else if (data_fault_valid && RELIABILITY_MODE) begin
-            tag_addr                        = data_parity_inv_q.addr >> CFG.LINE_ALIGN;
+            tag_addr                        = '1; //to change back when bug is solved //data_parity_inv_q.addr >> CFG.LINE_ALIGN;
             //$display("invalidation addr: %h,\n %b\n tag_addr: %h, LA=%d, CA=%d", data_parity_inv_q.addr, data_parity_inv_q.addr, tag_addr, CFG.LINE_ALIGN, CFG.COUNT_ALIGN );
             tag_enable                      = $unsigned(1 << data_parity_inv_q.cset);
             tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
