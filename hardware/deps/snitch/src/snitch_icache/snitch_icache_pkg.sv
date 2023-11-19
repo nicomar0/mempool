@@ -25,6 +25,7 @@ package snitch_icache_pkg;
         int FETCH_DW;
         int FILL_AW;
         int FILL_DW;
+        bit ENABLE_RELIABILITY;
         bit L1_TAG_SCM;
         bit EARLY_LATCH;
         bit BUFFER_LOOKUP;

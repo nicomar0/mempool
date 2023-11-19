@@ -65,3 +65,8 @@ xqueue_size ?= 0
 
 # Enable the XpulpIMG extension
 xpulpimg ?= 1
+
+# Enable the Reliability mode for RO caches and L1 icache
+rel_rocache ?= 1
+
+rel_l1icache ?= 1

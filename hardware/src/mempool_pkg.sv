@@ -134,6 +134,7 @@ package mempool_pkg;
   localparam int unsigned ICacheSizeByte  = 512 * NumCoresPerCache;     // Total Size of instruction cache in bytes
   localparam int unsigned ICacheSets      = NumCoresPerCache / 2;       // Number of sets
   localparam int unsigned ICacheLineWidth = 32 * 2 * NumCoresPerCache;  // Size of each cache line in bits
+  localparam bit          ICacheReliability = `ifdef REL_L1ICACHE `REL_L1ICACHE `else 1'bX `endif;      // Reliability for icaches enabled?
 
   /*********************
    *  READ-ONLY CACHE  *
@@ -143,7 +144,8 @@ package mempool_pkg;
   localparam int unsigned ROCacheLineWidth  = `ifdef RO_LINE_WIDTH `RO_LINE_WIDTH `else 0 `endif;
   localparam int unsigned ROCacheSizeByte   = 8192;
   localparam int unsigned ROCacheSets       = 2;
-
+  localparam bit          ROCacheReliability = `ifdef REL_ROCACHE `REL_ROCACHE `else 1'bX `endif;   // Reliability for ROcaches enabled?
+  
   localparam int unsigned ROCacheNumAddrRules = 4;
   typedef struct packed {
     logic enable;
