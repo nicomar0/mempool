@@ -4,7 +4,7 @@
 set allow_faults 1
 #[lindex $argv 0]
 
-if {$allow_faults ==1} {
+if {$::env(icache_faults)  ==1} {
     source ../scripts/questa/mempool_inject_fault.tcl
 
 }
