@@ -150,7 +150,7 @@ module snitch_icache_lookup_serial #(
             tag_wdata[CFG.TAG_WIDTH+1:0]  = '0;
             tag_write  = 1'b1;
         end else if (data_fault_valid && RELIABILITY_MODE) begin
-            tag_addr                        = '1; //to change back when bug is solved //data_parity_inv_q.addr >> CFG.LINE_ALIGN;
+            tag_addr                        = data_parity_inv_q.addr >> CFG.LINE_ALIGN;
             //$display("invalidation addr: %h,\n %b\n tag_addr: %h, LA=%d, CA=%d", data_parity_inv_q.addr, data_parity_inv_q.addr, tag_addr, CFG.LINE_ALIGN, CFG.COUNT_ALIGN );
             tag_enable                      = $unsigned(1 << data_parity_inv_q.cset);
             tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
@@ -178,14 +178,15 @@ module snitch_icache_lookup_serial #(
             req_valid  = 1'b1;
         end
     end
+    static int tag_faults=0, data_faults=0;
     always @ (posedge clk_i) begin
-        static int tag_faults=0, data_faults=0;
         if(data_fault_valid && RELIABILITY_MODE) begin
-            $display("%t [cache_lookup]: %dth DataFault -> Invalidating address %h, index: %h, set %h", $time, data_faults, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
             data_faults = data_faults+1;
-        end else if(faulty_hit_valid && RELIABILITY_MODE) begin
-            $display("%t [cache_lookup]: %dth TagFault -> Invalidating address %h, index: %h", $time, tag_faults, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
+            $display("%t [cache_lookup]: %dth DataFault -> Invalidating address %h, index: %h, set %h", $time, data_faults, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
+        end 
+        else if(faulty_hit_valid && RELIABILITY_MODE) begin
             tag_faults = tag_faults+1;
+            $display("%t [cache_lookup]: %dth TagFault -> Invalidating address %h, index: %h", $time, tag_faults, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
         end
         //if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h (idx %h) set %h", $time, write_addr_i, write_set_i);
     end
