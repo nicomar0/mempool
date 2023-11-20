@@ -179,8 +179,14 @@ module snitch_icache_lookup_serial #(
         end
     end
     always @ (posedge clk_i) begin
-        if(data_fault_valid && RELIABILITY_MODE) $display("%t [ROcache_lookup]: DataFault -> Invalidating address %h, index: %h, set %h", $time, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
-        else if(faulty_hit_valid && RELIABILITY_MODE) $display("%t [ROcache_lookup]: TagFault -> Invalidating address %h, index: %h", $time, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
+        static int tag_faults=0, data_faults=0;
+        if(data_fault_valid && RELIABILITY_MODE) begin
+            $display("%t [cache_lookup]: %dth DataFault -> Invalidating address %h, index: %h, set %h", $time, data_faults, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
+            data_faults = data_faults+1;
+        end else if(faulty_hit_valid && RELIABILITY_MODE) begin
+            $display("%t [cache_lookup]: %dth TagFault -> Invalidating address %h, index: %h", $time, tag_faults, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
+            tag_faults = tag_faults+1;
+        end
         //if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h (idx %h) set %h", $time, write_addr_i, write_set_i);
     end
 

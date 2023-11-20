@@ -4,14 +4,14 @@ set verbosity 3
 set log_injections 1
 set seed 12345
 set script_base_path "/scratch/sem23h18/project/mempool/hardware/scripts/questa/"
-set inject_start_time 20000ns
+set inject_start_time 10ns
 set inject_stop_time 0
 #use a clock in the tb
 set injection_clock "/mempool_tb/clk"
 set injection_clock_trigger 0
 set fault_period 10
 set rand_initial_injection_phase 0
-set max_num_fault_inject 2000
+set max_num_fault_inject 4000
 set signal_fault_duration 20ns
 set register_fault_duration 0ns
 
@@ -47,7 +47,8 @@ set no_banks_icache 63
 
     foreach inst $L1_tag_list {
         for {set index $max_idx_icache} {$index >= 0} {incr index -1} {
-            set signal_path "${inst}[${index}][${max_tag_width_icache}]"
+            set signal_path "${inst}[${index}]"
+#set signal_path "${inst}[${index}][${max_tag_width_icache}]"
             lappend inject_register_netlist $signal_path
         }
     }
@@ -66,7 +67,8 @@ set no_banks_rocache 127
 
     foreach inst $ROC_tag_list {
         for {set index $max_idx_rocache} {$index >= 0} {incr index -1} {
-            set signal_path "${inst}[${index}][${max_tag_width_rocache}]"
+#set signal_path "${inst}[${index}][${max_tag_width_rocache}]"
+            set signal_path "${inst}[${index}]"
             lappend inject_register_netlist $signal_path
         }
     }

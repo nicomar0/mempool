@@ -65,6 +65,7 @@ uint16_t l1_BitRevIndexTable[BITREVINDEXTABLE_LENGTH]
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 /* MAIN */
 int main() {
+  mempool_start_benchmark();
   uint32_t core_id = mempool_get_core_id();
   uint32_t num_cores = mempool_get_core_count();
   mempool_barrier_init(core_id);
@@ -111,13 +112,13 @@ int main() {
 #ifdef SINGLE
   int16_t *pRes; // Result pointer
   if (core_id == 0) {
-    mempool_start_benchmark();
+    //mempool_start_benchmark();
     mempool_radix4_cfft_q16s_xpulpimg(l1_pSrc, (uint16_t)N_CSAMPLES,
                                       l1_twiddleCoef_q16_src, 1);
     mempool_bitrevtable_q16s_xpulpimg(
         (uint16_t *)l1_pSrc, BITREVINDEXTABLE_LENGTH, l1_BitRevIndexTable);
     pRes = l1_pSrc;
-    mempool_stop_benchmark();
+    //mempool_stop_benchmark();
   }
   mempool_barrier(num_cores);
 #endif
@@ -126,14 +127,14 @@ int main() {
 /* MULTI-CORE */
 #ifdef PARALLEL
   int16_t *pRes; // Result pointer
-  mempool_start_benchmark();
+  //mempool_start_benchmark();
   mempool_radix4_cfft_q16p_xpulpimg(l1_pSrc, (uint16_t)N_CSAMPLES,
                                     l1_twiddleCoef_q16_src, 1, num_cores);
   mempool_bitrevtable_q16p_xpulpimg((uint16_t *)l1_pSrc,
                                     BITREVINDEXTABLE_LENGTH,
                                     l1_BitRevIndexTable, num_cores);
   pRes = l1_pSrc;
-  mempool_stop_benchmark();
+  //mempool_stop_benchmark();
 #endif
   mempool_barrier(num_cores);
 
@@ -142,7 +143,7 @@ int main() {
 #ifdef FOLDED
   int16_t *pRes; // Result pointer
   if (core_id < (N_CSAMPLES / 16)) {
-    mempool_start_benchmark();
+    //mempool_start_benchmark();
 #ifdef FOLDED_TWIDDLES
     mempool_radix4_cfft_q16p_folded(l1_pSrc, l1_pDst, (uint16_t)N_CSAMPLES,
                                     l1_twiddleCoef_q16_src,
@@ -154,7 +155,7 @@ int main() {
     pRes = ((LOG2 / 2) % 2) == 0 ? l1_pSrc : l1_pDst;
     mempool_bitrevtable_q16p_xpulpimg((uint16_t *)pRes, BITREVINDEXTABLE_LENGTH,
                                       pRevT16, (N_CSAMPLES / 16));
-    mempool_stop_benchmark();
+    //mempool_stop_benchmark();
   }
   mempool_barrier(num_cores);
 #endif
@@ -163,7 +164,7 @@ int main() {
 /* MULTI-CORE SCHEDULED */
 #ifdef SCHEDULED
   if (core_id < N_FFTs_COL * (N_CSAMPLES >> 4U)) {
-    mempool_start_benchmark();
+    //mempool_start_benchmark();
     uint32_t col_fftLen = N_CSAMPLES >> 2U;
     uint32_t col_id = core_id / (N_CSAMPLES >> 4U);
     mempool_radix4_cfft_q16p_scheduler(
@@ -172,7 +173,7 @@ int main() {
         l1_twiddleCoef_q16_dst + 2 * col_id * col_fftLen, l1_BitRevIndexTable,
         BITREVINDEXTABLE_LENGTH, 1, N_CSAMPLES >> 4U);
     mempool_log_partial_barrier(2, core_id, N_CSAMPLES >> 4U);
-    mempool_stop_benchmark();
+    //mempool_stop_benchmark();
   }
 #endif
   mempool_barrier(num_cores);
@@ -190,6 +191,6 @@ int main() {
   }
   mempool_barrier(num_cores);
 #endif
-
+  mempool_stop_benchmark();
   return 0;
 }
