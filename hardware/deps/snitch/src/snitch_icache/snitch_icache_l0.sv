@@ -37,17 +37,19 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     input  logic                         out_rsp_valid_i,
     output logic                         out_rsp_ready_o
 );
+  localparam bit RELIABILITY_MODE = 1'b1;
+  localparam int DATA_PARITY_WIDTH = RELIABILITY_MODE ? 8 : 0;
 
   typedef logic [CFG.FETCH_AW-1:0] addr_t;
   typedef struct packed {
-    logic [CFG.L0_TAG_WIDTH-1:0] tag;
+    logic [CFG.L0_TAG_WIDTH+RELIABILITY_MODE-1:0] tag;
     logic                        vld;
   } tag_t;
 
   logic [CFG.L0_TAG_WIDTH-1:0] addr_tag, addr_tag_prefetch;
 
   tag_t [CFG.L0_LINE_COUNT-1:0] tag;
-  logic [CFG.L0_LINE_COUNT-1:0][CFG.LINE_WIDTH-1:0] data;
+  logic [CFG.L0_LINE_COUNT-1:0][CFG.LINE_WIDTH+DATA_PARITY_WIDTH-1:0] data;
 
   logic [CFG.L0_LINE_COUNT-1:0] hit, hit_early, hit_prefetch;
   logic hit_early_is_onehot;
@@ -131,40 +133,86 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
 
   for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_array
     // Tag Array
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-      if (!rst_ni) begin
-        tag[i].vld <= 0;
-        tag[i].tag <= 0;
-      end else begin
-        if (evict_strb[i]) begin
-          tag[i].vld <= 1'b0;
-          tag[i].tag <= evict_because_prefetch ? addr_tag_prefetch : addr_tag;
-        end else if (validate_strb[i]) begin
-          tag[i].vld <= 1'b1;
-        end
-        if (flush_strb[i]) begin
-          tag[i].vld <= 1'b0;
-        end
-      end
-    end
-    if (CFG.EARLY_LATCH) begin : gen_latch
-      logic clk_vld;
-      tc_clk_gating i_clk_gate (
-        .clk_i     (clk_inv         ),
-        .en_i      (validate_strb[i]),
-        .test_en_i (1'b0            ),
-        .clk_o     (clk_vld         )
-      );
-      // Data Array
-      /* verilator lint_off NOLATCH */
-      always_latch begin
-        if (clk_vld) begin
-          data[i] <= out_rsp_data_i;
+    if(RELIABILITY_MODE) begin
+      always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+          tag[i].vld <= 0;
+          tag[i].tag <= 0;
+        end else begin
+          if (evict_strb[i]) begin
+            tag[i].vld <= 1'b0;
+            tag[i].tag <= evict_because_prefetch ? addr_tag_prefetch : addr_tag;
+          end else if (validate_strb[i]) begin
+            tag[i].vld <= 1'b1;
+          end
+          if (flush_strb[i]) begin
+            tag[i].vld <= 1'b0;
+          end
         end
       end
-      /* verilator lint_on NOLATCH */
-    end else begin : gen_ff
-      `FFLNR(data[i], out_rsp_data_i, validate_strb[i], clk_i)
+      if (CFG.EARLY_LATCH) begin : gen_latch
+        logic clk_vld;
+        tc_clk_gating i_clk_gate (
+          .clk_i     (clk_inv         ),
+          .en_i      (validate_strb[i]),
+          .test_en_i (1'b0            ),
+          .clk_o     (clk_vld         )
+        );
+        // Data Array
+        /* verilator lint_off NOLATCH */
+        always_latch begin
+          if (clk_vld) begin
+            data[i] <= out_rsp_data_i;
+          end
+        end
+        /* verilator lint_on NOLATCH */
+      end else begin : gen_ff
+        `FFLNR(data[i], out_rsp_data_i, validate_strb[i], clk_i)
+      end
+    end else begin
+    // Compute parity bit
+      logic [DATA_PARITY_WIDTH-1:0] data_parity;
+      localparam LINE_SPLIT = CFG.LINE_WIDTH/DATA_PARITY_WIDTH;
+      if (RELIABILITY_MODE) begin 
+          for (genvar i = 0; i < DATA_PARITY_WIDTH; i++) begin
+              assign data_parity = ~^out_rsp_data_i[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
+          end 
+      end
+      always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+          tag[i].vld <= 0;
+          tag[i].tag <= 0;
+        end else begin
+          if (evict_strb[i]) begin
+            tag[i].vld <= 1'b0;
+            tag[i].tag <= evict_because_prefetch ? {~^addr_tag_prefetch, addr_tag_prefetch} : {~^addr_tag, addr_tag};
+          end else if (validate_strb[i]) begin
+            tag[i].vld <= 1'b1;
+          end
+          if (flush_strb[i]) begin
+            tag[i].vld <= 1'b0;
+          end
+        end
+      end
+      if (CFG.EARLY_LATCH) begin : gen_latch
+        logic clk_vld;
+        tc_clk_gating i_clk_gate (
+          .clk_i     (clk_inv         ),
+          .en_i      (validate_strb[i]),
+          .test_en_i (1'b0            ),
+          .clk_o     (clk_vld         )
+        );
+        // Data Array
+        /* verilator lint_off NOLATCH */
+        always_latch begin
+          if (clk_vld) begin
+            data[i] <= {data_parity, out_rsp_data_i};
+          end
+        end
+        /* verilator lint_on NOLATCH */
+      end else begin : gen_ff
+        `FFLNR(data[i], out_rsp_data_i, validate_strb[i], clk_i)
+      end
     end
   end
 
