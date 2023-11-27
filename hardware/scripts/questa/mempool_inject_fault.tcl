@@ -7,7 +7,7 @@ set script_base_path "/scratch/sem23h18/project/mempool/hardware/scripts/questa/
 set inject_start_time 10ns
 set inject_stop_time 0
 #use a clock in the tb, fault_clk is 10 times faster than clk
-set injection_clock "/mempool_tb/clk"
+set injection_clock "/mempool_tb/fault_clk"
 set injection_clock_trigger 0
 set fault_period 1
 set rand_initial_injection_phase 0

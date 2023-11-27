@@ -395,28 +395,4 @@ module mempool_tb;
 `endif
 `endif
 
-  /********************************
-   *  Fault injection on icaches  *
-   ********************************/
-
-  `ifdef FAULT_INJECTION_ICACHE
-    localparam bit fault_injection_icache = `FAULT_INJECTION_ICACHE;
-    `ifdef FAULT_RATE
-      localparam int fault_rate       = `FAULT_RATE;
-    `else
-      localparam int fault_rate       = 1000;
-    `endif
-  `else
-    localparam bit fault_injection_icache = 1;
-    localparam int fault_rate       = 100;
-  `endif
-  logic fault_clk;
-  if (fault_injection_icache) begin : gen_fault_clock
-    // Toggling the clock
-    always #(ClockPeriod*fault_rate/2) fault_clk = !fault_clk;
-    initial begin
-      fault_clk   = 1'b0;
-    end
-  end
-
 endmodule : mempool_tb
