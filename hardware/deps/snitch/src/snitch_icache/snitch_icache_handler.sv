@@ -339,7 +339,7 @@ module snitch_icache_handler #(
             in_rsp_served_q <= 0;
         end else begin
             write_served_q <= rsp_valid & ~rsp_ready & (write_served_q | write_ready_i);
-            in_rsp_served_q <= rsp_valid & ~rsp_ready & (in_rsp_served_q | in_rsp_ready_i) & !push_enable;
+            in_rsp_served_q <= rsp_valid & ~rsp_ready & (in_rsp_served_q | in_rsp_ready_i);
         end
     end
 
