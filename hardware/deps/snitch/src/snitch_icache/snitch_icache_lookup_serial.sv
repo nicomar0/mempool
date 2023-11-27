@@ -40,7 +40,7 @@ module snitch_icache_lookup_serial #(
 );
     localparam int RELIABILITY_MODE = CFG.ENABLE_RELIABILITY;
     localparam int unsigned DATA_ADDR_WIDTH = $clog2(CFG.SET_COUNT) + CFG.COUNT_ALIGN;
-    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd4 : '0; // TODO: propagate it up as a parameter
+    localparam int unsigned DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd8 : '0; // TODO: propagate it up as a parameter
 
     `ifndef SYNTHESIS
     initial assert(CFG != '0);
