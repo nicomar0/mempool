@@ -39,6 +39,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
 );
   localparam bit RELIABILITY_MODE = 1'b1;
   localparam int DATA_PARITY_WIDTH = RELIABILITY_MODE ? 8 : 0;
+  localparam LINE_SPLIT = CFG.LINE_WIDTH/DATA_PARITY_WIDTH;
 
   typedef logic [CFG.FETCH_AW-1:0] addr_t;
   typedef struct packed {
@@ -133,7 +134,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
 
   for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_array
     // Tag Array
-    if(RELIABILITY_MODE) begin
+    if(!RELIABILITY_MODE) begin
       always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
           tag[i].vld <= 0;
@@ -172,10 +173,9 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     end else begin
     // Compute parity bit
       logic [DATA_PARITY_WIDTH-1:0] data_parity;
-      localparam LINE_SPLIT = CFG.LINE_WIDTH/DATA_PARITY_WIDTH;
       if (RELIABILITY_MODE) begin 
           for (genvar i = 0; i < DATA_PARITY_WIDTH; i++) begin
-              assign data_parity = ~^out_rsp_data_i[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
+              assign data_parity[i] = ~^out_rsp_data_i[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
           end 
       end
       always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -211,7 +211,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
         end
         /* verilator lint_on NOLATCH */
       end else begin : gen_ff
-        `FFLNR(data[i], out_rsp_data_i, validate_strb[i], clk_i)
+        `FFLNR(data[i], {data_parity, out_rsp_data_i}, validate_strb[i], clk_i)
       end
     end
   end
@@ -220,7 +220,21 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   // HIT
   // ----
   // we hit in the cache and there was a unique hit.
-  assign in_ready_o = hit_any & hit_early_is_onehot;
+  logic [CFG.L0_LINE_COUNT-1:0][DATA_PARITY_WIDTH-1:0]  exp_data_parity;
+  logic [CFG.L0_LINE_COUNT-1:0]                         data_parity_error_vect;
+  logic                                                 data_parity_error;
+  if (RELIABILITY_MODE) begin 
+    for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin
+          for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
+              assign exp_data_parity[i][j] = ~^data[i][CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
+          end 
+      assign data_parity_error_vect[i] = (exp_data_parity != data[i][CFG.LINE_WIDTH+:DATA_PARITY_WIDTH]);
+    end
+    assign data_parity_error = data_parity_error_vect >> in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN];
+    assign in_ready_o = hit_any & hit_early_is_onehot & !data_parity_error;
+  end else begin
+    assign in_ready_o = hit_any & hit_early_is_onehot;
+  end
 
   logic [CFG.LINE_WIDTH-1:0] ins_data;
   always_comb begin : data_muxer
