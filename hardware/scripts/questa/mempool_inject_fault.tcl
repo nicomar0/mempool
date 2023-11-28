@@ -78,7 +78,12 @@ set no_banks_rocache 127
             lappend inject_register_netlist $signal_path
         }
     }
-
+for {set i 0} {$i < (llength $inject_register_netlist)} {incr i} {
+    set j [expr {int(rand() * (lllength $inject_register_netlist))}]
+    set temp [lindex $inject_register_netlist $j]
+    set inject_register_netlist [lreplace $inject_register_netlist $j $j [lindex $inject_register_netlist $i]]
+    set inject_register_netlist [lreplace $inject_register_netlist $i $i $temp]
+}
 
 set inject_signals_netlist []
 set output_netlist []
