@@ -4,8 +4,8 @@ set verbosity 1
 set log_injections 1
 set seed 12345
 set script_base_path "/scratch/sem23h18/project/mempool/hardware/scripts/questa/"
-set inject_start_time 10ns
-set inject_stop_time 0
+set inject_start_time 5500ns
+set inject_stop_time 10000ns
 #use a clock in the tb, fault_clk is 10 times faster than clk
 set injection_clock "/mempool_tb/fault_clk"
 set injection_clock_trigger 0

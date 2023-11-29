@@ -86,7 +86,9 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   `FF(last_cycle_was_prefetch_q, latch_prefetch, '0)
 
   logic evict_because_miss, evict_because_prefetch;
-
+  
+  
+  logic data_parity_error;
   typedef struct packed {
     logic                    is_prefetch;
     logic [CFG.FETCH_AW-1:0] addr;
@@ -119,10 +121,10 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
         (tag[i].tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]
           == addr_tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]);
     end
-    assign hit_prefetch[i] = tag[i].vld & (tag[i].tag == addr_tag_prefetch);
+    assign hit_prefetch[i] = tag[i].vld & (tag[i].tag[CFG.L0_TAG_WIDTH-1:0] == addr_tag_prefetch);
   end
 
-  assign hit_any = |hit;
+  assign hit_any = |hit && !data_parity_error;
   assign hit_prefetch_any = |hit_prefetch;
   assign miss = ~hit_any & in_valid_i & ~pending_refill_q;
 
@@ -132,6 +134,12 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     .clk_o (clk_inv)
   );
 
+  logic [DATA_PARITY_WIDTH-1:0] data_parity;
+  if (RELIABILITY_MODE) begin   
+    for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
+        assign data_parity[j] = ~^out_rsp_data_i[CFG.LINE_WIDTH - LINE_SPLIT*j -1 -: LINE_SPLIT]; 
+    end 
+  end
   for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_array
     // Tag Array
     if(!RELIABILITY_MODE) begin
@@ -172,12 +180,6 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
       end
     end else begin
     // Compute parity bit
-      logic [DATA_PARITY_WIDTH-1:0] data_parity;
-      if (RELIABILITY_MODE) begin 
-          for (genvar i = 0; i < DATA_PARITY_WIDTH; i++) begin
-              assign data_parity[i] = ~^out_rsp_data_i[CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
-          end 
-      end
       always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
           tag[i].vld <= 0;
@@ -222,16 +224,16 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   // we hit in the cache and there was a unique hit.
   logic [CFG.L0_LINE_COUNT-1:0][DATA_PARITY_WIDTH-1:0]  exp_data_parity;
   logic [CFG.L0_LINE_COUNT-1:0]                         data_parity_error_vect;
-  logic                                                 data_parity_error;
+
   if (RELIABILITY_MODE) begin 
     for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin
           for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
-              assign exp_data_parity[i][j] = ~^data[i][CFG.LINE_WIDTH - LINE_SPLIT*i -1 -: LINE_SPLIT]; 
+              assign exp_data_parity[i][j] = ~^data[i][CFG.LINE_WIDTH - LINE_SPLIT*j -1 -: LINE_SPLIT]; 
           end 
-      assign data_parity_error_vect[i] = (exp_data_parity != data[i][CFG.LINE_WIDTH+:DATA_PARITY_WIDTH]);
+      assign data_parity_error_vect[i] = (exp_data_parity[i] != data[i][CFG.LINE_WIDTH+:DATA_PARITY_WIDTH]) && hit[i];
     end
     assign data_parity_error = data_parity_error_vect >> in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN];
-    assign in_ready_o = hit_any & hit_early_is_onehot & !data_parity_error;
+    assign in_ready_o = hit_any & hit_early_is_onehot;
   end else begin
     assign in_ready_o = hit_any & hit_early_is_onehot;
   end
