@@ -87,8 +87,10 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
 
   logic evict_because_miss, evict_because_prefetch;
   
-  
   logic data_parity_error;
+  logic [CFG.L0_LINE_COUNT-1:0] tag_parity_error_vect;
+  logic [CFG.L0_LINE_COUNT-1:0] exp_tag_parity;
+
   typedef struct packed {
     logic                    is_prefetch;
     logic [CFG.FETCH_AW-1:0] addr;
@@ -109,19 +111,43 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   // ------------
   // Tag Compare
   // ------------
-  for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_cmp_fetch
-    assign hit_early[i] = tag[i].vld &
-      (tag[i].tag[CFG.L0_EARLY_TAG_WIDTH-1:0] == addr_tag[CFG.L0_EARLY_TAG_WIDTH-1:0]);
-    // The two signals calculate the same.
-    if (CFG.L0_TAG_WIDTH == CFG.L0_EARLY_TAG_WIDTH) begin : gen_hit_assign
-      assign hit[i] = hit_early[i];
-    // Compare the rest of the tag.
-    end else begin : gen_hit
-      assign hit[i] = hit_early[i] &
-        (tag[i].tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]
-          == addr_tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]);
+  if (RELIABILITY_MODE) begin 
+    for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_exp_parity
+      assign exp_tag_parity[i] = ~^tag[i].tag[CFG.L0_TAG_WIDTH-1:0];
     end
-    assign hit_prefetch[i] = tag[i].vld & (tag[i].tag[CFG.L0_TAG_WIDTH-1:0] == addr_tag_prefetch);
+  end
+
+  if (!RELIABILITY_MODE) begin 
+    for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_cmp_fetch
+      assign hit_early[i] = tag[i].vld &
+        (tag[i].tag[CFG.L0_EARLY_TAG_WIDTH-1:0] == addr_tag[CFG.L0_EARLY_TAG_WIDTH-1:0]);
+      // The two signals calculate the same.
+      if (CFG.L0_TAG_WIDTH == CFG.L0_EARLY_TAG_WIDTH) begin : gen_hit_assign
+        assign hit[i] = hit_early[i];
+      // Compare the rest of the tag.
+      end else begin : gen_hit
+        assign hit[i] = hit_early[i] &
+          (tag[i].tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]
+            == addr_tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]);
+      end
+      assign hit_prefetch[i] = tag[i].vld & (tag[i].tag[CFG.L0_TAG_WIDTH-1:0] == addr_tag_prefetch);
+    end
+  end else begin
+    for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_cmp_fetch
+      assign tag_parity_error_vect[i] = exp_tag_parity[i] != tag[i].tag[CFG.L0_TAG_WIDTH];
+      assign hit_early[i] = tag[i].vld &
+        (tag[i].tag[CFG.L0_EARLY_TAG_WIDTH-1:0] == addr_tag[CFG.L0_EARLY_TAG_WIDTH-1:0]);
+      // The two signals calculate the same.
+      if (CFG.L0_TAG_WIDTH == CFG.L0_EARLY_TAG_WIDTH) begin : gen_hit_assign
+        assign hit[i] = hit_early[i] & !tag_parity_error_vect[i];
+      // Compare the rest of the tag.
+      end else begin : gen_hit
+        assign hit[i] = hit_early[i] &
+          (tag[i].tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]
+            == addr_tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]) & !tag_parity_error_vect[i];
+      end
+      assign hit_prefetch[i] = tag[i].vld & (tag[i].tag[CFG.L0_TAG_WIDTH-1:0] == addr_tag_prefetch);
+    end
   end
 
   assign hit_any = |hit && !data_parity_error;
@@ -288,6 +314,10 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
       // We want to evict all entries which hit with the early tag
       // but didn't hit in the final comparison.
       flush_strb = ~hit & hit_early;
+    end
+    if (RELIABILITY_MODE && data_parity_error) begin
+      // Evict entry that hit but have faults on the data
+      //flush_strb = data_parity_error_vect;
     end
     if (flush_valid_i) flush_strb = '1;
   end
