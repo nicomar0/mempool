@@ -88,6 +88,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   logic evict_because_miss, evict_because_prefetch;
   
   logic data_parity_error;
+  logic tag_parity_error;
   logic [CFG.L0_LINE_COUNT-1:0] tag_parity_error_vect;
   logic [CFG.L0_LINE_COUNT-1:0] exp_tag_parity;
 
@@ -134,7 +135,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     end
   end else begin
     for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_cmp_fetch
-      assign tag_parity_error_vect[i] = exp_tag_parity[i] != tag[i].tag[CFG.L0_TAG_WIDTH];
+      assign tag_parity_error_vect[i] = (exp_tag_parity[i] != tag[i].tag[CFG.L0_TAG_WIDTH]) && tag[i].vld;
       assign hit_early[i] = tag[i].vld &
         (tag[i].tag[CFG.L0_EARLY_TAG_WIDTH-1:0] == addr_tag[CFG.L0_EARLY_TAG_WIDTH-1:0]);
       // The two signals calculate the same.
@@ -256,7 +257,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
           for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
               assign exp_data_parity[i][j] = ~^data[i][CFG.LINE_WIDTH - LINE_SPLIT*j -1 -: LINE_SPLIT]; 
           end 
-      assign data_parity_error_vect[i] = (exp_data_parity[i] != data[i][CFG.LINE_WIDTH+:DATA_PARITY_WIDTH]) && hit[i];
+      assign data_parity_error_vect[i] = (exp_data_parity[i] != data[i][CFG.LINE_WIDTH+:DATA_PARITY_WIDTH]) && tag[i].vld;
     end
     assign data_parity_error = data_parity_error_vect >> in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN];
     assign in_ready_o = hit_any & hit_early_is_onehot;
@@ -315,11 +316,20 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
       // but didn't hit in the final comparison.
       flush_strb = ~hit & hit_early;
     end
-    if (RELIABILITY_MODE && data_parity_error) begin
-      // Evict entry that hit but have faults on the data
-      //flush_strb = data_parity_error_vect;
+    if (RELIABILITY_MODE && tag_parity_error_vect!='0) begin
+      // Evict all tags that have a fault
+      flush_strb = tag_parity_error_vect;
+    end
+    if (RELIABILITY_MODE && data_parity_error_vect!='0) begin
+      // Evict entry that hit but has faults on the data
+      flush_strb = flush_strb | data_parity_error_vect;
     end
     if (flush_valid_i) flush_strb = '1;
+  end
+  always @ (posedge clk_i) begin
+    if (RELIABILITY_MODE && tag_parity_error_vect != '0 && data_parity_error_vect != '0) $display("%t [l0cache]:tag and data fault: flushing tags: %b",$time, flush_strb);
+    else if (RELIABILITY_MODE && tag_parity_error_vect != '0) $display("%t [l0cache]:tag fault: flushing tags: %b",$time, flush_strb);
+    else if (RELIABILITY_MODE && data_parity_error_vect != '0) $display("%t [l0cache]:data fault: flushing tags: %b",$time, flush_strb);
   end
 
   `FF(cnt_q, cnt_d, '0)
