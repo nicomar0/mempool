@@ -85,3 +85,28 @@ foreach inst $inst_list {
 # puts $fhandle $inst
 #}
 #close $fhandle ; 
+
+
+# Search for all instances of tag banks for L0
+set pattern_match "*i_snitch_icache_l0"
+set inst_list [find instances -r $pattern_match] ;
+set L0_tag_list [list] ;
+foreach inst $inst_list {
+ set ipath [lindex $inst 0]
+ if {[string match $pattern_match $ipath]} {
+ append ipath "/tag"
+ lappend L0_tag_list $ipath
+ }
+}
+
+# Search for all instances of data banks for L0
+set pattern_match "*i_snitch_icache_l0"
+set inst_list [find instances -r $pattern_match] ;
+set L0_data_list [list] ;
+foreach inst $inst_list {
+ set ipath [lindex $inst 0]
+ if {[string match $pattern_match $ipath]} {
+ append ipath "/data"
+ lappend L0_data_list $ipath
+ }
+}
