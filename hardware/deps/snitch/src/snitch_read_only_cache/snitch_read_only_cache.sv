@@ -197,7 +197,8 @@ module snitch_read_only_cache #(
     FETCH_DW:           AxiDataWidth,
     FILL_AW:            AxiAddrWidth,
     FILL_DW:            AxiDataWidth,
-    ENABLE_RELIABILITY: Reliability,
+    RELIABILITY_L1:     Reliability,
+    RELIABILITY_L0:     0, // Unused here
     L1_TAG_SCM:         0, // Unused here
     EARLY_LATCH:        0, // Unused here
     BUFFER_LOOKUP:      1, // Mandatory here

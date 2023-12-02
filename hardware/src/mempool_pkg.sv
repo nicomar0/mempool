@@ -135,7 +135,8 @@ package mempool_pkg;
   localparam int unsigned ICacheSizeByte  = 512 * NumCoresPerCache;     // Total Size of instruction cache in bytes
   localparam int unsigned ICacheSets      = NumCoresPerCache / 2;       // Number of sets
   localparam int unsigned ICacheLineWidth = 32 * 2 * NumCoresPerCache;  // Size of each cache line in bits
-  localparam bit          ICacheReliability = `ifdef REL_L1ICACHE `REL_L1ICACHE `else 1'bX `endif;      // Reliability for icaches enabled?
+  localparam bit          ICacheReliabilityL1 = `ifdef REL_L1ICACHE `REL_L1ICACHE `else 1'bX `endif;      // Reliability for L1 icaches enabled?
+  localparam bit          ICacheReliabilityL0 = `ifdef REL_L0ICACHE `REL_L0ICACHE `else 1'bX `endif;      // Reliability for L0 icaches enabled?
 
   /*********************
    *  READ-ONLY CACHE  *

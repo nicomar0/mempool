@@ -37,8 +37,8 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     input  logic                         out_rsp_valid_i,
     output logic                         out_rsp_ready_o
 );
-  localparam bit RELIABILITY_MODE = 1'b1;
-  localparam int DATA_PARITY_WIDTH = RELIABILITY_MODE ? 8 : 0;
+  localparam bit RELIABILITY_MODE = CFG.RELIABILITY_L0;
+  localparam int DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd8 : '0;
   localparam LINE_SPLIT = CFG.LINE_WIDTH/DATA_PARITY_WIDTH;
 
   typedef logic [CFG.FETCH_AW-1:0] addr_t;
@@ -88,7 +88,6 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   logic evict_because_miss, evict_because_prefetch;
   
   logic data_parity_error;
-  logic tag_parity_error;
   logic [CFG.L0_LINE_COUNT-1:0] tag_parity_error_vect;
   logic [CFG.L0_LINE_COUNT-1:0] exp_tag_parity;
 
@@ -150,8 +149,11 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
       assign hit_prefetch[i] = tag[i].vld & (tag[i].tag[CFG.L0_TAG_WIDTH-1:0] == addr_tag_prefetch);
     end
   end
-
-  assign hit_any = |hit && !data_parity_error;
+  if(RELIABILITY_MODE) begin
+    assign hit_any = |hit && !data_parity_error;
+  end else begin
+    assign hit_any = |hit;
+  end
   assign hit_prefetch_any = |hit_prefetch;
   assign miss = ~hit_any & in_valid_i & ~pending_refill_q;
 
@@ -249,10 +251,10 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   // HIT
   // ----
   // we hit in the cache and there was a unique hit.
-  logic [CFG.L0_LINE_COUNT-1:0][DATA_PARITY_WIDTH-1:0]  exp_data_parity;
   logic [CFG.L0_LINE_COUNT-1:0]                         data_parity_error_vect;
 
   if (RELIABILITY_MODE) begin 
+    logic [CFG.L0_LINE_COUNT-1:0][DATA_PARITY_WIDTH-1:0]  exp_data_parity;
     for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin
           for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
               assign exp_data_parity[i][j] = ~^data[i][CFG.LINE_WIDTH - LINE_SPLIT*j -1 -: LINE_SPLIT]; 
@@ -260,10 +262,8 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
       assign data_parity_error_vect[i] = (exp_data_parity[i] != data[i][CFG.LINE_WIDTH+:DATA_PARITY_WIDTH]) && tag[i].vld;
     end
     assign data_parity_error = data_parity_error_vect >> in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN];
-    assign in_ready_o = hit_any & hit_early_is_onehot;
-  end else begin
-    assign in_ready_o = hit_any & hit_early_is_onehot;
   end
+  assign in_ready_o = hit_any & hit_early_is_onehot;
 
   logic [CFG.LINE_WIDTH-1:0] ins_data;
   always_comb begin : data_muxer

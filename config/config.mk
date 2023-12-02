@@ -69,10 +69,12 @@ xqueue_size ?= 0
 # Enable the XpulpIMG extension
 xpulpimg ?= 1
 
-# Enable the Reliability mode for RO caches and L1 icache
+# Enable the Reliability mode for RO caches and L1 and L0 icache
 rel_rocache ?= 1
 
 rel_l1icache ?= 1
+
+rel_l0icache ?= 1
 
 # Enable fault injection in the instruction caches and define fault rate (clok_periods/fault)
 

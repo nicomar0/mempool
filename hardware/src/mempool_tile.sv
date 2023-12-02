@@ -177,7 +177,8 @@ module mempool_tile
       .FETCH_DW           (DataWidth                                           ),
       .FILL_AW            (AddrWidth                                           ),
       .FILL_DW            (AxiDataWidth                                        ),
-      .RELIABILITY        (ICacheReliability                                   ),
+      .RELIABILITY_L1     (ICacheReliabilityL1                                 ),
+      .RELIABILITY_L0     (ICacheReliabilityL0                                 ),
       .L1_TAG_SCM         (1                                                   ),
       /// Make the early cache latch-based. This reduces latency at the cost of
       /// increased combinatorial path lengths and the hassle of having latches in
