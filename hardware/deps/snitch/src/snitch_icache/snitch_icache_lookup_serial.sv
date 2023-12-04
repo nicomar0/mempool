@@ -179,8 +179,8 @@ module snitch_icache_lookup_serial #(
         end
     end
     always @ (posedge clk_i) begin
-        if(data_fault_valid && RELIABILITY_MODE) $display("%t [ROcache_lookup]: DataFault -> Invalidating address %h, index: %h, set %h", $time, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
-        else if(faulty_hit_valid && RELIABILITY_MODE) $display("%t [ROcache_lookup]: TagFault -> Invalidating address %h, index: %h", $time, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
+        if(data_fault_valid && RELIABILITY_MODE) $warning("%t [ROcache_lookup]: DataFault -> Invalidating address %h, index: %h, set %h", $time, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
+        else if(faulty_hit_valid && RELIABILITY_MODE) $warning("%t [ROcache_lookup]: TagFault -> Invalidating address %h, index: %h", $time, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
         //if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h (idx %h) set %h", $time, write_addr_i, write_set_i);
     end
 
@@ -306,11 +306,6 @@ module snitch_icache_lookup_serial #(
         logic                        error;
     } data_req_t;
 
-    /*typedef struct packed{
-        logic [CFG.LINE_WIDTH-1:0] data_line;
-        logic [DATA_PARITY_WIDTH-1:0] parity_bit;
-    }data_rsp_t;*/
-
     typedef logic [CFG.LINE_WIDTH + DATA_PARITY_WIDTH - 1:0] data_rsp_t;
 
 
@@ -373,10 +368,6 @@ module snitch_icache_lookup_serial #(
         .be_i    ( '1          ),
         .rdata_o ( data_rdata  )
     );
-    always @ (posedge clk_i) begin
-        //if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h set %h", $time, write_addr_i, write_set_i);
-        //if(out_valid_o && hit_invalid && out_ready_i) $display("(%t) [ROcache_lookup]: Wrong data 0x%x (addr=%h) invalidated", $time, out_data_o, out_addr_o);
-    end
 
     // Parity check
     logic [DATA_PARITY_WIDTH-1:0]   data_parity_error;
@@ -409,9 +400,6 @@ module snitch_icache_lookup_serial #(
     if (RELIABILITY_MODE) begin 
         assign data_parity_inv_d.addr = data_req_q.addr;
         assign data_parity_inv_d.cset = data_req_q.id;
-        // add check that next address is different from previous one
-        //assign same_invalidation_address = (data_req_q.addr == data_parity_inv_q.addr) && hit_invalid; //if address is the same as before, no need to invalidate it again
-        ///*|| (tag_handshake && same_invalidation_address)*/) ? /*{data_parity_inv_q.addr, data_parity_inv_q.cset, 1'b0}*/
         `FFL(data_parity_inv_q, (data_fault_ready && !tag_handshake) ? '0 : data_parity_inv_d, tag_handshake || data_fault_ready, '0, clk_i, rst_ni) //reset value when it has been invalidated and there is no new value
         `FFL(hit_invalid_q, data_parity_inv_d.parity_error, tag_handshake, '0, clk_i, rst_ni)
     end
