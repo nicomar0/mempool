@@ -151,22 +151,20 @@ module snitch_icache_lookup_serial #(
             tag_write  = 1'b1;
         end else if (data_fault_valid && RELIABILITY_MODE) begin
             tag_addr                        = data_parity_inv_q.addr >> CFG.LINE_ALIGN;
-            //$display("invalidation addr: %h,\n %b\n tag_addr: %h, LA=%d, CA=%d", data_parity_inv_q.addr, data_parity_inv_q.addr, tag_addr, CFG.LINE_ALIGN, CFG.COUNT_ALIGN );
             tag_enable                      = $unsigned(1 << data_parity_inv_q.cset);
             tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
             tag_write                       = 1'b1;  
             data_fault_ready                = 1'b1;
-            //$display("%t [ROcache_lookup]: DataFault -> Invalidating address %h", $time, data_parity_inv_q.addr);
         end else if (write_valid_i) begin
             // Write a refill request
             tag_addr      = write_addr_i;
             tag_enable    = $unsigned(1 << write_set_i);
             tag_write     = 1'b1;
             write_ready_o = 1'b1;
-        end else if (faulty_hit_valid && RELIABILITY_MODE) begin //we need to set second bit (valid) of write data of the previous adress to 0
-            //we do not accept read requests and we do not store data in the pipeline.
-            tag_addr                        = tag_req_q.addr >> CFG.LINE_ALIGN; //buffered version of in_addr_i
-            tag_enable                      = tag_parity_error_q; // which set must be written to (the faulty one(s))
+        end else if (faulty_hit_valid && RELIABILITY_MODE) begin // we need to set second bit (valid) of write data of the previous adress to 0
+            // we do not accept read requests and we do not store data in the pipeline.
+            tag_addr                        = tag_req_q.addr >> CFG.LINE_ALIGN; // buffered version of in_addr_i
+            tag_enable                      = tag_parity_error_q; // which set must be written to (the one(s) with faults
             tag_wdata[CFG.TAG_WIDTH+1:0]    = '0;
             tag_write                       = 1'b1;
             faulty_hit_ready                = 1'b1;
@@ -178,10 +176,16 @@ module snitch_icache_lookup_serial #(
             req_valid  = 1'b1;
         end
     end
+    int  unsigned tag_faults=0, data_faults=0;
     always @ (posedge clk_i) begin
-        if(data_fault_valid && RELIABILITY_MODE) $warning("%t [ROcache_lookup]: DataFault -> Invalidating address %h, index: %h, set %h", $time, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
-        else if(faulty_hit_valid && RELIABILITY_MODE) $warning("%t [ROcache_lookup]: TagFault -> Invalidating address %h, index: %h", $time, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
-        //if(write_valid_i && write_ready_o && data_wdata == '0) $display("(%t) [ROcache_lookup]: Writing 0 at index %h (idx %h) set %h", $time, write_addr_i, write_set_i);
+        if(data_fault_valid && RELIABILITY_MODE) begin 
+            $warning("%t [snitch_icache_lookup]: DataFault -> Invalidating address %h, index: %h, set %h", $time, data_parity_inv_q.addr, data_parity_inv_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN], data_parity_inv_q.cset);
+            data_faults = data_faults+1;
+        end
+        else if(faulty_hit_valid && RELIABILITY_MODE) begin
+            $warning("%t [snitch_icache_lookup]: TagFault -> Invalidating address %h, index: %h", $time, tag_req_q.addr, tag_req_q.addr[CFG.LINE_ALIGN+:CFG.COUNT_ALIGN]);
+            tag_faults = tag_faults+1;
+        end
     end
 
     // Instantiate the tag sets.
@@ -222,7 +226,7 @@ module snitch_icache_lookup_serial #(
         );
     end
 
-    // compute tag parity bit the cycle before reading it and buffer it
+    // compute tag parity bit the cycle before reading the tag and buffer it
     logic exp_tag_parity_bit_d, exp_tag_parity_bit_q;
 
     if (RELIABILITY_MODE) begin
@@ -404,7 +408,6 @@ module snitch_icache_lookup_serial #(
         `FFL(hit_invalid_q, data_parity_inv_d.parity_error, tag_handshake, '0, clk_i, rst_ni)
     end
     
-
 
     // Generate the remaining output signals.
     assign out_addr_o  = data_req_q.addr;
