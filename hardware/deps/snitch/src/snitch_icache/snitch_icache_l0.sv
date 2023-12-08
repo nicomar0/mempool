@@ -318,7 +318,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     end
     if (RELIABILITY_MODE && tag_parity_error_vect!='0) begin
       // Evict all tags that have a fault
-      flush_strb = tag_parity_error_vect;
+      flush_strb = flush_strb | tag_parity_error_vect;
     end
     if (RELIABILITY_MODE && data_parity_error_vect!='0) begin
       // Evict entry that hit but has faults on the data
