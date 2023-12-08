@@ -74,7 +74,7 @@ rel_rocache ?= 1
 
 rel_l1icache ?= 1
 
-rel_l0icache ?= 1
+rel_l0icache ?= 0
 
 # Enable fault injection in the instruction caches and define fault rate (clok_periods/fault)
 

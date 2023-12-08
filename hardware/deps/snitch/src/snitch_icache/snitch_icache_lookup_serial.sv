@@ -330,7 +330,7 @@ module snitch_icache_lookup_serial #(
     assign data_req_d.hit   = tag_rsp.hit;
     assign data_req_d.error = tag_rsp.error;
 
-    assign lookup_addr = {tag_rsp.cset, tag_req_q.addr[CFG.LINE_ALIGN +: CFG.COUNT_ALIGN]}; //eg if 256 line width Line_align is log2(nr of bytes), 2 set counts, i.e. 3 bits for line, 1 for set, take bits from 1 to 5
+    assign lookup_addr = {tag_rsp.cset, tag_req_q.addr[CFG.LINE_ALIGN +: CFG.COUNT_ALIGN]};
     assign write_addr  = {write_set_i, write_addr_i};
 
     localparam LINE_SPLIT = CFG.LINE_WIDTH/DATA_PARITY_WIDTH;
@@ -348,7 +348,7 @@ module snitch_icache_lookup_serial #(
         data_enable = tag_valid && tag_rsp.hit; // Only read data on hit
         data_wdata[CFG.LINE_WIDTH -1:0] = write_data_i;
         data_write  = 1'b0;
-        // Before: Write takes priority, with FT-> write does not have priority over invalidation
+        // Write takes priority, with FT-> write does not have priority over invalidation
         if (!init_phase && write_valid_i && !data_fault_valid) begin
             data_addr   = write_addr;
             data_enable = 1'b1;
