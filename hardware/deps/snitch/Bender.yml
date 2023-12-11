@@ -7,8 +7,9 @@ package:
   authors: [ "Florian Zaruba <zarubaf@iis.ee.ethz.ch>" ]
 
 dependencies:
-  axi:          { git: "https://github.com/pulp-platform/axi.git",          version: 0.36.0 }
-  common_cells: { git: "https://github.com/pulp-platform/common_cells.git", version: 1.19.0 }
+  axi:              { git: "https://github.com/pulp-platform/axi.git",          version: 0.36.0 }
+  common_cells:     { git: "https://github.com/pulp-platform/common_cells.git", version: 1.19.0 }
+  redundancy_cells: { git: "https://github.com/pulp-platform/redundancy_cells", version: 0.5.1  }
 
 sources:
   - defines:
