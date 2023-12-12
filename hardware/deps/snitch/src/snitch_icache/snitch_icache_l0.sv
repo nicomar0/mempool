@@ -38,8 +38,8 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     output logic                         out_rsp_ready_o
 );
   localparam bit RELIABILITY_MODE = CFG.RELIABILITY_L0;
-  localparam int DATA_PARITY_WIDTH = RELIABILITY_MODE ? 'd8 : '0;
-  localparam LINE_SPLIT = CFG.LINE_WIDTH/DATA_PARITY_WIDTH;
+  localparam int DATA_PARITY_WIDTH = RELIABILITY_MODE ? (CFG.LINE_WIDTH/CFG.FETCH_DW)*7 : '0;
+  //localparam LINE_SPLIT = CFG.LINE_WIDTH/DATA_PARITY_WIDTH;
 
   typedef logic [CFG.FETCH_AW-1:0] addr_t;
   typedef struct packed {
@@ -163,10 +163,13 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     .clk_o (clk_inv)
   );
 
-  logic [DATA_PARITY_WIDTH-1:0] data_parity;
+  logic [CFG.LINE_WIDTH+DATA_PARITY_WIDTH-1:0] data_encoded;
   if (RELIABILITY_MODE) begin   
-    for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
-        assign data_parity[j] = ~^out_rsp_data_i[CFG.LINE_WIDTH - LINE_SPLIT*j -1 -: LINE_SPLIT]; 
+    for (genvar j = 0; j < CFG.LINE_WIDTH/CFG.FETCH_DW; j++) begin: gen_enc
+      prim_secded_39_32_enc i_enc_39_32 (
+        .in(out_rsp_data_i[CFG.LINE_WIDTH - CFG.FETCH_DW*j -1 -: CFG.FETCH_DW]),
+        .out(data_encoded[256+56 - 1 - (39)*j -: (39)])
+      );
     end 
   end
   for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_array
@@ -237,12 +240,12 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
         /* verilator lint_off NOLATCH */
         always_latch begin
           if (clk_vld) begin
-            data[i] <= {data_parity, out_rsp_data_i};
+            data[i] <= data_encoded;
           end
         end
         /* verilator lint_on NOLATCH */
       end else begin : gen_ff
-        `FFLNR(data[i], {data_parity, out_rsp_data_i}, validate_strb[i], clk_i)
+        `FFLNR(data[i], data_encoded, validate_strb[i], clk_i)
       end
     end
   end
@@ -252,27 +255,46 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   // ----
   // we hit in the cache and there was a unique hit.
   logic [CFG.L0_LINE_COUNT-1:0]                         data_parity_error_vect;
+  logic [CFG.L0_LINE_COUNT-1:0][CFG.LINE_WIDTH-1:0]     data_decoded;
+  logic [CFG.L0_LINE_COUNT-1:0][CFG.LINE_WIDTH/CFG.FETCH_DW-1:0][1:0] data_errors;
+  logic [CFG.L0_LINE_COUNT-1:0][CFG.LINE_WIDTH/CFG.FETCH_DW-1:0] data_errors_line;
 
   if (RELIABILITY_MODE) begin 
-    logic [CFG.L0_LINE_COUNT-1:0][DATA_PARITY_WIDTH-1:0]  exp_data_parity;
     for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin
-          for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
-              assign exp_data_parity[i][j] = ~^data[i][CFG.LINE_WIDTH - LINE_SPLIT*j -1 -: LINE_SPLIT]; 
-          end 
-      assign data_parity_error_vect[i] = (exp_data_parity[i] != data[i][CFG.LINE_WIDTH+:DATA_PARITY_WIDTH]) && tag[i].vld;
+      for (genvar j = 0; j < CFG.LINE_WIDTH/CFG.FETCH_DW; j++) begin: gen_enc
+        prim_secded_39_32_dec i_dec_39_32 (
+          .in(data[i][CFG.LINE_WIDTH + DATA_PARITY_WIDTH - (CFG.FETCH_DW+7)*j -1 -: (CFG.FETCH_DW+7)]),
+          .d_o(data_decoded[i][256 - 32*j -1 -: CFG.FETCH_DW]),
+          .syndrome_o(),
+          .err_o(data_errors[i][j])
+        );
+        assign data_errors_line[i][j] = data_errors[i][j][1]; 
+      end 
+      assign data_parity_error_vect[i] = |data_errors_line[i] && tag[i].vld;
     end
     assign data_parity_error = data_parity_error_vect >> in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN];
   end
   assign in_ready_o = hit_any & hit_early_is_onehot;
 
   logic [CFG.LINE_WIDTH-1:0] ins_data;
-  always_comb begin : data_muxer
-    ins_data = '0;
-    for (int unsigned i = 0; i < CFG.L0_LINE_COUNT; i++) begin
-      ins_data |= {CFG.LINE_WIDTH{hit_early[i]}} & data[i];
+  if(!RELIABILITY_MODE) begin 
+    always_comb begin : data_muxer
+      ins_data = '0;
+      for (int unsigned i = 0; i < CFG.L0_LINE_COUNT; i++) begin
+        ins_data |= {CFG.LINE_WIDTH{hit_early[i]}} & data[i];
+      end
+      in_data_o = ins_data >> (in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN] * CFG.FETCH_DW);
     end
-    in_data_o = ins_data >> (in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN] * CFG.FETCH_DW);
-  end
+  end else begin
+    always_comb begin : data_muxer
+      ins_data = '0;
+      for (int unsigned i = 0; i < CFG.L0_LINE_COUNT; i++) begin
+        ins_data |= {CFG.LINE_WIDTH{hit_early[i]}} & data_decoded[i];
+      end
+      in_data_o = ins_data >> (in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN] * CFG.FETCH_DW);
+    end
+
+  end 
 
   // Check whether we had an early multi-hit (e.g., the portion of the tag matched
   // multiple entries in the tag array)
