@@ -168,7 +168,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     for (genvar j = 0; j < CFG.LINE_WIDTH/CFG.FETCH_DW; j++) begin: gen_enc
       prim_secded_39_32_enc i_enc_39_32 (
         .in(out_rsp_data_i[CFG.LINE_WIDTH - CFG.FETCH_DW*j -1 -: CFG.FETCH_DW]),
-        .out(data_encoded[256+56 - 1 - (39)*j -: (39)])
+        .out(data_encoded[256+56 - 1 - (39)*j -: (39)])  //CFG.LINE_WIDTH + DATA_PARITY_WIDTH -1 - (CFG.FETCH_DW+7)*j -:(CFG.FETCH_DW+7)
       );
     end 
   end
@@ -264,7 +264,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
       for (genvar j = 0; j < CFG.LINE_WIDTH/CFG.FETCH_DW; j++) begin: gen_enc
         prim_secded_39_32_dec i_dec_39_32 (
           .in(data[i][CFG.LINE_WIDTH + DATA_PARITY_WIDTH - (CFG.FETCH_DW+7)*j -1 -: (CFG.FETCH_DW+7)]),
-          .d_o(data_decoded[i][256 - 32*j -1 -: CFG.FETCH_DW]),
+          .d_o(data_decoded[i][256 - 32*j -1 -: CFG.FETCH_DW]), //CFG.LINE_WIDTH - CFG.FETCH_DW*j -1 -: CFG.FETCH_DW
           .syndrome_o(),
           .err_o(data_errors[i][j])
         );
