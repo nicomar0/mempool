@@ -30,7 +30,7 @@ module snitch_icache_lookup_serial #(
     output logic                        out_valid_o,
     input  logic                        out_ready_i,
 
-    input  logic [CFG.COUNT_ALIGN-1:0]  write_addr_i, //when write valid, it goes contemporaritly to both stages, otherwise data stage uses lookup addr from tag stage
+    input  logic [CFG.COUNT_ALIGN-1:0]  write_addr_i,
     input  logic [CFG.SET_ALIGN-1:0]    write_set_i,
     input  logic [CFG.LINE_WIDTH-1:0]   write_data_i,
     input  logic [CFG.TAG_WIDTH-1:0]    write_tag_i,
@@ -133,7 +133,7 @@ module snitch_icache_lookup_serial #(
 
     assign data_fault_valid = RELIABILITY_MODE ? data_parity_inv_q.parity_error : '0;
     always_comb begin
-        tag_addr   = in_addr_i >> CFG.LINE_ALIGN; //if 128 line count, shift right 8 bits to get the index
+        tag_addr   = in_addr_i >> CFG.LINE_ALIGN; //right shift to get {tag, index} bits
         tag_enable = '0;
         tag_wdata[CFG.TAG_WIDTH+1:0]  = {1'b1, write_error_i, write_tag_i};
         tag_write  = 1'b0;
@@ -265,19 +265,16 @@ module snitch_icache_lookup_serial #(
     // Buffer the metadata on a valid handshake. Stall on write (implicit in req_valid/ready)
     `FFL(tag_req_q, tag_req_d, req_valid && req_ready, '0, clk_i, rst_ni)
     if(RELIABILITY_MODE) begin
+        // save faulty sets and clear when upstream invalidated them
         `FFL(tag_parity_error_q, tag_parity_error_d, req_valid && req_ready, '0, clk_i, rst_ni)
         `FFL(faulty_hit_q, (faulty_hit_ready && !(req_valid && req_ready))? 1'b0 : faulty_hit_d, req_valid && req_ready || faulty_hit_ready, '0, clk_i, rst_ni)
     end
     assign faulty_hit_valid = RELIABILITY_MODE ? faulty_hit_q : '0; //if there is a write request, select the buffered version to be invalidated
 
     `FF(tag_valid, req_valid ? 1'b1 : tag_ready ? 1'b0 : tag_valid, '0, clk_i, rst_ni)
-    if(!RELIABILITY_MODE) begin
-    // Ready if buffer is empy or downstream is reading. Stall on write (and data invalidation not needed as it is included in req_valid)
-        assign req_ready = (!tag_valid || tag_ready) && !tag_write;
-    end else begin
-       // Ready if buffer is empy or downstream is reading. Stall on write 
-        assign req_ready = (!tag_valid || tag_ready) && !tag_write; 
-    end
+    
+    // Ready if buffer is empy or downstream is reading. Stall on write 
+    assign req_ready = (!tag_valid || tag_ready) && !tag_write; 
 
     // Register the handshake of the reg stage to buffer the tag output data in the next cycle
     `FF(req_handshake, req_valid && req_ready, 1'b0, clk_i, rst_ni)
@@ -348,12 +345,14 @@ module snitch_icache_lookup_serial #(
         data_enable = tag_valid && tag_rsp.hit; // Only read data on hit
         data_wdata[CFG.LINE_WIDTH -1:0] = write_data_i;
         data_write  = 1'b0;
-        // Write takes priority, with FT-> write does not have priority over invalidation
+        // Write takes priority, with FT-> write does not have priority over invalidation to not invalidate new data
         if (!init_phase && write_valid_i && !data_fault_valid) begin
             data_addr   = write_addr;
             data_enable = 1'b1;
             data_write  = 1'b1;
         end
+
+        // Assertions to check whether new data is written in both data and tag
         //assert property ( @(posedge clk_i) tag_write && write_valid_i |-> data_write ) else $error("Writing tag but not data");
         //assert property ( @(posedge clk_i) data_write && write_valid_i |-> tag_write ) else $error("Writing data but not tag");
     end
