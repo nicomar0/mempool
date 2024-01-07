@@ -111,6 +111,8 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
   // ------------
   // Tag Compare
   // ------------
+
+  // For every line, compute the current parity bit
   if (RELIABILITY_MODE) begin 
     for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_exp_parity
       assign exp_tag_parity[i] = ~^tag[i].tag[CFG.L0_TAG_WIDTH-1:0];
@@ -134,13 +136,14 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     end
   end else begin
     for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin : gen_cmp_fetch
+      // Compute a parity error vector comparing the expected parity bit and the current one.
       assign tag_parity_error_vect[i] = (exp_tag_parity[i] != tag[i].tag[CFG.L0_TAG_WIDTH]) && tag[i].vld;
       assign hit_early[i] = tag[i].vld &
         (tag[i].tag[CFG.L0_EARLY_TAG_WIDTH-1:0] == addr_tag[CFG.L0_EARLY_TAG_WIDTH-1:0]);
       // The two signals calculate the same.
       if (CFG.L0_TAG_WIDTH == CFG.L0_EARLY_TAG_WIDTH) begin : gen_hit_assign
         assign hit[i] = hit_early[i] & !tag_parity_error_vect[i];
-      // Compare the rest of the tag.
+      // Compare the rest of the tag and corresponding parity error vector.
       end else begin : gen_hit
         assign hit[i] = hit_early[i] &
           (tag[i].tag[CFG.L0_TAG_WIDTH-1:CFG.L0_EARLY_TAG_WIDTH]
@@ -150,6 +153,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     end
   end
   if(RELIABILITY_MODE) begin
+    // A parity error in the data overwrites the hit into a miss
     assign hit_any = |hit && !data_parity_error;
   end else begin
     assign hit_any = |hit;
@@ -165,6 +169,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
 
   logic [DATA_PARITY_WIDTH-1:0] data_parity;
   if (RELIABILITY_MODE) begin   
+    // For every block of the configured block size, compute the parity bit
     for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
         assign data_parity[j] = ~^out_rsp_data_i[CFG.LINE_WIDTH - LINE_SPLIT*j -1 -: LINE_SPLIT]; 
     end 
@@ -234,6 +239,7 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
           .clk_o     (clk_vld         )
         );
         // Data Array
+        // Store both the parity and the data
         /* verilator lint_off NOLATCH */
         always_latch begin
           if (clk_vld) begin
@@ -255,12 +261,14 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
 
   if (RELIABILITY_MODE) begin 
     logic [CFG.L0_LINE_COUNT-1:0][DATA_PARITY_WIDTH-1:0]  exp_data_parity;
+    // For every line, we compute the expected parity for every block, then we determine which lines are faulty
     for (genvar i = 0; i < CFG.L0_LINE_COUNT; i++) begin
           for (genvar j = 0; j < DATA_PARITY_WIDTH; j++) begin
               assign exp_data_parity[i][j] = ~^data[i][CFG.LINE_WIDTH - LINE_SPLIT*j -1 -: LINE_SPLIT]; 
           end 
       assign data_parity_error_vect[i] = (exp_data_parity[i] != data[i][CFG.LINE_WIDTH+:DATA_PARITY_WIDTH]) && tag[i].vld;
     end
+    // Check whether the currently selected data has an error
     assign data_parity_error = data_parity_error_vect >> in_addr_i[CFG.LINE_ALIGN-1:CFG.FETCH_ALIGN];
   end
   assign in_ready_o = hit_any & hit_early_is_onehot;
@@ -326,10 +334,12 @@ module snitch_icache_l0 import snitch_icache_pkg::*; #(
     end
     if (flush_valid_i) flush_strb = '1;
   end
+
+  // Send a warning that an error was detected
   always @ (posedge clk_i) begin
-    if (RELIABILITY_MODE && tag_parity_error_vect != '0 && data_parity_error_vect != '0) $display("%t [l0cache]:tag and data fault: flushing tags: %b",$time, flush_strb);
-    else if (RELIABILITY_MODE && tag_parity_error_vect != '0) $display("%t [l0cache]:tag fault: flushing tags: %b",$time, flush_strb);
-    else if (RELIABILITY_MODE && data_parity_error_vect != '0) $display("%t [l0cache]:data fault: flushing tags: %b",$time, flush_strb);
+    if (RELIABILITY_MODE && tag_parity_error_vect != '0 && data_parity_error_vect != '0) $display("%t [l0cache]: tag and data fault: flushing tags: %b",$time, flush_strb);
+    else if (RELIABILITY_MODE && tag_parity_error_vect != '0) $display("%t [l0cache]: tag fault: flushing tags: %b",$time, flush_strb);
+    else if (RELIABILITY_MODE && data_parity_error_vect != '0) $display("%t [l0cache]: data fault: flushing tags: %b",$time, flush_strb);
   end
 
   `FF(cnt_q, cnt_d, '0)
