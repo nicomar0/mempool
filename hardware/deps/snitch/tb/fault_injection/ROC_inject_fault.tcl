@@ -42,11 +42,12 @@ set max_tag_line_index 47 ; # Replace with the actual maximum value
 #debug 57, normal 47
 
 # Add the signal paths with maximum indices to the inject_register_netlist
+# Do not add the tag signal without indexes, as it flips entire lines to 0
+# To check tag functionality, we invert only the parity bit, which is the last one
 for {set index $max_index_value} {$index >= 0} {incr index -1} {
     set signal_path "${itag_sram_path}[${index}][${max_tag_line_index}]"
     lappend inject_register_netlist $signal_path
 }
-#lappend inject_register_netlist /snitch_read_only_cache_tb/dut/i_lookup/i_data/sram #do not do this: it flips entire registers to zero
 
 #set max_data_index 63;
 set max_data_index [expr {
@@ -57,13 +58,6 @@ for {set index $max_data_index} {$index >= 0} {incr index -1} {
     set signal_path "${idata_sram_path}[${index}]"
     lappend inject_register_netlist $signal_path
 }
-
-#lappend inject_register_netlist /snitch_read_only_cache_tb/dut/i_lookup/i_data/sram[63]
-
-
-#/snitch_read_only_cache_tb/dut/i_lookup/i_data/sram
-#/snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_tag/sram
-
 
 set inject_signals_netlist []
 set output_netlist []
