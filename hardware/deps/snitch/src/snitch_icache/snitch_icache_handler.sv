@@ -152,7 +152,7 @@ module snitch_icache_handler #(
         .empty_o (                 )
     );
 
-    // Gurarntee ordering
+    // Guarantee ordering
     // Check if there is a miss in flight from this ID. In that case, stall all
     // further requests to guarantee correct ordering of requests.
     logic [CFG.ID_WIDTH_RESP-1:0] miss_in_flight_d, miss_in_flight_q;
@@ -214,8 +214,8 @@ module snitch_icache_handler #(
                 in_req_ready_o = hit_ready;
 
             // The cache lookup was a miss, but there is already a pending
-            // refill that covers the line.
-            end else if (pending) begin
+            // refill that covers the line and the lookup accepted the request.
+            end else if (pending && !(write_valid_o && !write_ready_i)) begin
                 push_index  = pending_id;
                 push_enable = 1;
 

@@ -40,15 +40,17 @@ module mempool_tb;
    *  Clock and Reset Generation  *
    ********************************/
 
-  logic clk;
+  logic clk, fault_clk;
   logic rst_n;
 
   // Toggling the clock
   always #(ClockPeriod/2) clk = !clk;
+  always #(ClockPeriod/20) fault_clk = !fault_clk;
 
   // Controlling the reset
   initial begin
     clk   = 1'b1;
+    fault_clk = 1'b1;
     rst_n = 1'b0;
 
     repeat (5)

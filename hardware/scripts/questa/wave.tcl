@@ -84,4 +84,6 @@ add wave -Group DMA_midend_cluster /mempool_tb/dut/i_mempool_cluster/i_idma_dist
 
 add wave -Group DMA_split /mempool_tb/dut/i_mempool_cluster/i_idma_split_midend/*
 
+add wave -Group L0CACHE /mempool_tb/dut/i_mempool_cluster/gen_groups[0]/i_group/gen_tiles[0]/i_tile/gen_caches[0]/i_snitch_icache/gen_prefetcher[0]/i_snitch_icache_l0/*
+
 do ../scripts/questa/wave_cache.tcl 0 0 0

@@ -15,6 +15,8 @@ module snitch_read_only_cache #(
   parameter int unsigned LineCount    = -1,
   /// The set associativity of the cache. Power of two; >= 1.
   parameter int unsigned SetCount     = 1,
+  /// Reliability mode adds parity checks in the lookup module
+  parameter bit          Reliability  = 0,
   /// AXI address width
   parameter int unsigned AxiAddrWidth = 0,
   /// AXI data width
@@ -195,6 +197,8 @@ module snitch_read_only_cache #(
     FETCH_DW:           AxiDataWidth,
     FILL_AW:            AxiAddrWidth,
     FILL_DW:            AxiDataWidth,
+    RELIABILITY_L1:     Reliability,
+    RELIABILITY_L0:     0, // Unused here
     L1_TAG_SCM:         0, // Unused here
     EARLY_LATCH:        0, // Unused here
     BUFFER_LOOKUP:      1, // Mandatory here
