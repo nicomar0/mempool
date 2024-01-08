@@ -1,3 +1,6 @@
+# This script produces a list of the tag and data nets in the L0, L1 and RO cache.
+# Optionally, these can be saved in a file.
+
 # Search for all instances of tag banks for ROC
 set pattern_match "*/i_snitch_read_only_cache/i_lookup/gen_sram/i_tag*" ;
 # Get the list of instance paths
@@ -11,6 +14,7 @@ foreach inst $inst_list {
  lappend ROC_tag_list $ipath
  }
 }
+
 # At this point, ROC_tag_list contains the list of instances only--
 # no architecture names
 #
@@ -28,7 +32,7 @@ foreach inst $inst_list {
 
 
 
-# Search for all instances of tag banks for L1I
+# Search for all instances of tag banks for L1 IC
 set pattern_match "*]/i_tag*"
 set inst_list [find instances -r $pattern_match] ;
 set L1_tag_list [list] ;
@@ -68,7 +72,7 @@ foreach inst $inst_list {
 
 
 
-# Search for all instances of data banks for L1I
+# Search for all instances of data banks for L1 IC
 set pattern_match "*/i_snitch_icache/i_lookup/i_data*"
 set inst_list [find instances -r $pattern_match] ;
 set L1_data_list [list] ;
@@ -87,7 +91,7 @@ foreach inst $inst_list {
 #close $fhandle ; 
 
 
-# Search for all instances of tag banks for L0
+# Search for all instances of tag banks for L0 IC
 set pattern_match "*i_snitch_icache_l0"
 set inst_list [find instances -r $pattern_match] ;
 set L0_tag_list [list] ;
@@ -99,7 +103,7 @@ foreach inst $inst_list {
  }
 }
 
-# Search for all instances of data banks for L0
+# Search for all instances of data banks for L0 IC
 set pattern_match "*i_snitch_icache_l0"
 set inst_list [find instances -r $pattern_match] ;
 set L0_data_list [list] ;
