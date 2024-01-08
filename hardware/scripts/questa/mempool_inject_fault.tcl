@@ -21,30 +21,18 @@ set check_core_output_modification 0
 set check_core_next_state_modification 0
 set reg_to_sig_ratio 1
 
-#proc base_path {} {return "/snitch_read_only_cache_tb/dut/i_lookup/gen_sram/i_tag"} 
 source ${::script_base_path}get_banks.tcl
-
-#proc add_signals_injection {tag_list tag_idx tag_max_width data_list no_databanks} {
-#    foreach inst $tag_list {
-#        for {set index $tag_idx} {$index >= 0} {incr index -1} {
-#            set signal_path "${inst}[${index}][${tag_max_width}]"
-#            lappend inject_register_netlist $signal_path
-#        }
-#    }
-#    foreach inst $data_list {
-#        for {set index $no_databanks} {$index >= 0} {incr index -1} {
-#            set signal_path "${inst}[${index}]"
-#            lappend inject_register_netlist $signal_path
-#        }
-#    }
-#}
 set inject_register_netlist {}
+
+# Tag fault injection on Snitch Instruction Cache
+# how many lines in the tag banks
 set max_idx_icache 31
+# length of tag banks line
 set max_tag_width_icache 25
-
+# lines in the data banks
 set no_banks_icache 63
-#add_signals_injection $L1_tag_list $max_idx_icache $max_tag_width_icache $L1_data_list $no_banks_icache
 
+# To check error detection on the tag, inject faults only on the parity bits. To check performance, inject on the entire line.
     foreach inst $L1_tag_list {
         for {set index $max_idx_icache} {$index >= 0} {incr index -1} {
             set signal_path "${inst}[${index}]"
@@ -59,11 +47,10 @@ set no_banks_icache 63
         }
     }
 
+# Tag fault injection on Snitch RO Cache
 set max_idx_rocache 63
 set max_tag_width_rocache 47
-
 set no_banks_rocache 127
-#add_signals_injection $ROC_tag_list $max_idx_rocache $max_tag_width_rocache $L1_data_list $no_banks_rocache
 
     foreach inst $ROC_tag_list {
         for {set index $max_idx_rocache} {$index >= 0} {incr index -1} {
@@ -79,6 +66,7 @@ set no_banks_rocache 127
         }
     }
 
+# Tag fault injection in the L0 Cache, unfortunately not working correctly due to a bug. See fault injection script for more details.
 set max_idx_l0cache 3
 set max_tag_width_l0cache 27
 set no_banks_l0cache 3
@@ -99,7 +87,7 @@ set no_banks_l0cache 3
     }
 
 
-#random shuffle of the list
+# Random shuffle of the list, the log showed that fault injection script is not so random in picking the signals
 for {set i 0} {$i < [llength $inject_register_netlist]} {incr i} {
     set j [expr {int(rand() * [llength $inject_register_netlist])}]
     set temp [lindex $inject_register_netlist $j]
