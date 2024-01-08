@@ -14,7 +14,7 @@ app=hello_world icache_faults=1 make sim
 ```
 
 
-## Get the number of faults that the Snitch Lookup had to deal with
+### Get the number of faults that the Snitch Lookup had to deal with
 
 After the simulation finishes, it is possible to get the information on how many faults were detected.
 
